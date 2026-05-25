@@ -602,6 +602,13 @@ export default function App() {
   const [practiceRevealed, setPracticeRevealed] = useState(false)
   const [showHint, setShowHint] = useState(false)
   const [showEmail, setShowEmail] = useState(false)
+  // ─── Compare mode ───
+  const [compareMode, setCompareMode] = useState(false)
+  const [variantA, setVariantA] = useState(null)        // snapshot result
+  const [variantAPrompt, setVariantAPrompt] = useState('')
+  const [variantBPrompt, setVariantBPrompt] = useState('')
+  const [variantBLoading, setVariantBLoading] = useState(false)
+  const [variantBResult, setVariantBResult] = useState(null)
   const diagramAreaRef = useRef(null)
   const toastTimerRef = useRef(null)
 
@@ -667,6 +674,41 @@ export default function App() {
       setError(`generation failed — ${e.message}`)
     } finally {
       setLoading(false)
+    }
+  }
+
+  function enterCompareMode() {
+    if (!result) return
+    setVariantA(result)
+    setVariantAPrompt(prompt)
+    setVariantBPrompt('')
+    setVariantBResult(null)
+    setCompareMode(true)
+    flashToast('compare mode — enter a second prompt')
+  }
+  function exitCompareMode() {
+    setCompareMode(false)
+    setVariantA(null)
+    setVariantBPrompt('')
+    setVariantBResult(null)
+  }
+  async function runVariantB() {
+    const q = variantBPrompt.trim()
+    if (!q || variantBLoading) return
+    setVariantBLoading(true)
+    try {
+      const res = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: q }),
+      })
+      if (!res.ok) throw new Error(`server returned ${res.status}`)
+      const data = await res.json()
+      setVariantBResult(data)
+    } catch (e) {
+      flashToast(`variant B failed — ${e.message}`)
+    } finally {
+      setVariantBLoading(false)
     }
   }
 
@@ -783,6 +825,7 @@ export default function App() {
             <a href="#features">Features</a>
             <a href="#how">How it works</a>
             <a href="#types">Diagrams</a>
+            <a href="#pricing">Pricing</a>
           </div>
           <button
             className="nav-history-btn"
@@ -894,6 +937,31 @@ export default function App() {
         </div>
       </section>
 
+      {/* ── STATS STRIP ── */}
+      <section className="stats-section">
+        <div className="stats-inner">
+          <div className="stat">
+            <div className="stat-value grad-text">&lt;100<span className="stat-unit">ms</span></div>
+            <div className="stat-label">re-render latency</div>
+          </div>
+          <div className="stat-divider" />
+          <div className="stat">
+            <div className="stat-value grad-text">6<span className="stat-unit">types</span></div>
+            <div className="stat-label">diagram families</div>
+          </div>
+          <div className="stat-divider" />
+          <div className="stat">
+            <div className="stat-value grad-text">100<span className="stat-unit">%</span></div>
+            <div className="stat-label">spec-verified output</div>
+          </div>
+          <div className="stat-divider" />
+          <div className="stat">
+            <div className="stat-value grad-text">0<span className="stat-unit">$</span></div>
+            <div className="stat-label">for students with .edu</div>
+          </div>
+        </div>
+      </section>
+
       {/* ── GENERATOR ── */}
       <section className="generator-section" id="try">
         <div className="section-inner">
@@ -904,6 +972,108 @@ export default function App() {
               🎲 Random Practice Problem
             </button>
           </div>
+
+          {/* COMPARE MODE BANNER */}
+          {compareMode && (
+            <div className="compare-banner">
+              <div className="cb-left">
+                <span className="cb-icon">↔</span>
+                <div>
+                  <div className="cb-title">COMPARE MODE</div>
+                  <div className="cb-sub">
+                    Variant A: <code>{variantAPrompt || '(empty)'}</code>
+                  </div>
+                </div>
+              </div>
+              <button className="cb-exit" onClick={exitCompareMode}>✕ Exit compare</button>
+            </div>
+          )}
+
+          {compareMode && (
+            <div className="compare-grid">
+              {/* Variant A column */}
+              <div className="compare-col">
+                <div className="compare-col-head">
+                  <span className="cc-badge cc-badge--a">A</span>
+                  <span className="cc-prompt">{variantAPrompt}</span>
+                </div>
+                {variantA?.image_b64 ? (
+                  <div className="canvas">
+                    <img src={`data:image/png;base64,${variantA.image_b64}`} alt={variantA.title} />
+                  </div>
+                ) : variantA?.mermaid_code ? (
+                  <MermaidView code={variantA.mermaid_code} />
+                ) : (
+                  <div className="canvas canvas-empty">no diagram</div>
+                )}
+                {variantA?.solution?.summary && (
+                  <div className="sol-summary" style={{ marginTop: 12 }}>
+                    {variantA.solution.summary}
+                  </div>
+                )}
+              </div>
+
+              {/* Variant B column */}
+              <div className="compare-col">
+                <div className="compare-col-head">
+                  <span className="cc-badge cc-badge--b">B</span>
+                  <input
+                    className="cc-input"
+                    value={variantBPrompt}
+                    onChange={e => setVariantBPrompt(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && runVariantB()}
+                    placeholder="e.g. RC low-pass filter with 10kOhm and 100nF"
+                    autoFocus
+                  />
+                  <button
+                    className="cc-go"
+                    onClick={runVariantB}
+                    disabled={!variantBPrompt.trim() || variantBLoading}
+                  >
+                    {variantBLoading ? '⟳' : '↗'}
+                  </button>
+                </div>
+                {variantBLoading ? (
+                  <div className="canvas canvas-empty"><span className="canvas-hint">generating variant B…</span></div>
+                ) : variantBResult?.image_b64 ? (
+                  <div className="canvas">
+                    <img src={`data:image/png;base64,${variantBResult.image_b64}`} alt={variantBResult.title} />
+                  </div>
+                ) : variantBResult?.mermaid_code ? (
+                  <MermaidView code={variantBResult.mermaid_code} />
+                ) : (
+                  <div className="canvas canvas-empty">enter a prompt above →</div>
+                )}
+                {variantBResult?.solution?.summary && (
+                  <div className="sol-summary" style={{ marginTop: 12 }}>
+                    {variantBResult.solution.summary}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* DIFF CALLOUT (only when both variants have solutions) */}
+          {compareMode && variantA?.solution?.solvable && variantBResult?.solution?.solvable && (
+            <div className="compare-diff">
+              <div className="cd-head">⚡ Differences</div>
+              <div className="cd-rows">
+                {Object.keys(variantA.solution.quantities || {}).map(key => {
+                  const a = variantA.solution.quantities[key]
+                  const b = variantBResult.solution.quantities?.[key]
+                  const changed = a !== b && b !== undefined
+                  return (
+                    <div className={`cd-row ${changed ? 'cd-row--changed' : ''}`} key={key}>
+                      <span className="cd-key">{key}</span>
+                      <span className="cd-a">{a}</span>
+                      <span className="cd-arrow">{changed ? '→' : '='}</span>
+                      <span className="cd-b">{b ?? '—'}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
           {practice && (
             <div className="practice-card">
@@ -1016,6 +1186,8 @@ export default function App() {
                 <IconBtn onClick={actCopyJSON} title="Copy spec JSON to clipboard">⎘ Spec</IconBtn>
                 <span className="rt-sep" />
                 <IconBtn onClick={actShareLink} title="Copy shareable URL" hot>↗ Share</IconBtn>
+                <span className="rt-sep" />
+                <IconBtn onClick={enterCompareMode} title="Compare this result with another prompt side-by-side">↔ Compare</IconBtn>
               </div>
 
               {/* schematic panel */}
@@ -1169,6 +1341,72 @@ export default function App() {
                 <div className="tc-try">try it →</div>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── PRICING ── */}
+      <section className="pricing-section" id="pricing">
+        <div className="section-inner">
+          <div className="section-label">// pricing</div>
+          <h2 className="section-h2">Free for students. <span className="grad-text">Always.</span></h2>
+          <p className="section-sub">
+            Built by an engineering student, for engineering students. Verified <code>.edu</code> emails get <em>everything</em> free.
+          </p>
+          <div className="pricing-grid">
+            <div className="price-card">
+              <div className="pc-tier">Free</div>
+              <div className="pc-price">$0<span>/forever</span></div>
+              <p className="pc-tagline">Try it. Build it. Learn it.</p>
+              <ul className="pc-features">
+                <li>✓ 50 diagrams per month</li>
+                <li>✓ All 6 diagram types</li>
+                <li>✓ PNG / SVG / JSON downloads</li>
+                <li>✓ Tweak panel + math solver</li>
+                <li>✓ Shareable URLs</li>
+                <li className="pc-muted">✗ PDF lab reports</li>
+                <li className="pc-muted">✗ Cloud history</li>
+              </ul>
+              <a href="#try" className="pc-cta pc-cta--ghost">Start free →</a>
+            </div>
+
+            <div className="price-card price-card--featured">
+              <div className="pc-ribbon">★ MOST POPULAR</div>
+              <div className="pc-tier">Pro</div>
+              <div className="pc-price">$9<span>/month</span></div>
+              <p className="pc-tagline">For serious engineers and builders.</p>
+              <ul className="pc-features">
+                <li>✓ <strong>Unlimited</strong> diagrams</li>
+                <li>✓ All 6 diagram types</li>
+                <li>✓ <strong>PDF lab reports</strong> w/ working steps</li>
+                <li>✓ Cloud history sync across devices</li>
+                <li>✓ Priority Groq inference</li>
+                <li>✓ Custom branding on exports</li>
+                <li>✓ Early access to new diagram types</li>
+              </ul>
+              <a href="#try" className="pc-cta">Upgrade to Pro →</a>
+            </div>
+
+            <div className="price-card price-card--edu">
+              <div className="pc-ribbon pc-ribbon--edu">🎓 EDU FREE</div>
+              <div className="pc-tier">Student</div>
+              <div className="pc-price">$0<span>/forever</span></div>
+              <p className="pc-tagline">Verified <code>.edu</code> = full Pro, free.</p>
+              <ul className="pc-features">
+                <li>✓ <strong>Everything in Pro</strong></li>
+                <li>✓ Unlimited diagrams + PDF reports</li>
+                <li>✓ Cloud history sync</li>
+                <li>✓ Priority inference</li>
+                <li>✓ Free during academic enrollment</li>
+                <li>✓ Lab report templates</li>
+                <li>✓ Practice problem library</li>
+              </ul>
+              <a href="#try" className="pc-cta pc-cta--ghost">Verify .edu →</a>
+            </div>
+          </div>
+          <div className="pricing-footnote">
+            Need a <strong>team plan</strong> or <strong>enterprise integration</strong>?{' '}
+            <a href="mailto:hello@dgram.ai">Get in touch →</a>
           </div>
         </div>
       </section>
