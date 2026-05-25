@@ -200,4 +200,49 @@ If `GROQ_API_KEY` is not set or the network is down, DiagramAI falls back to a k
 
 ---
 
+## Deployment (Render)
+
+The repo ships with a `Dockerfile` and `render.yaml` so a deploy is one click:
+
+1. Push the repo to GitHub (already at https://github.com/Tanny28/dgram-ai).
+2. Sign in at https://render.com and click **New → Blueprint**.
+3. Connect this repo. Render reads `render.yaml`, picks Docker runtime, and prompts for the `GROQ_API_KEY` env var.
+4. Paste your Groq key, click **Create**. Build takes ~4 minutes (installs Graphviz, builds the React bundle, copies backend).
+5. Render gives you a `https://dgram-ai.onrender.com` URL. Update the `og:url`, `canonical`, and `sitemap.xml` host references if you wire a custom domain.
+
+The free Render tier sleeps after 15 minutes of inactivity — the first request after a sleep takes ~30 seconds to cold-start. Paid plans avoid this.
+
+### Custom domain
+
+Once you have a domain, point an `A` record to Render's IP (shown in the service settings) and update:
+
+- `frontend/index.html` — `og:url`, `og:image`, `twitter:url`, `twitter:image`, `canonical`
+- `frontend/public/sitemap.xml` — every `<loc>` URL
+- `frontend/public/robots.txt` — `Sitemap:` line
+
+### Analytics
+
+The site is analytics-free by default. To enable privacy-friendly traffic stats:
+
+1. Sign up at https://plausible.io (or self-host).
+2. Register your domain.
+3. Uncomment the `<script defer data-domain="..."` line in `frontend/index.html`.
+
+No cookies, no consent banner needed.
+
+---
+
+## SEO checklist
+
+- [x] Title + meta description
+- [x] OpenGraph + Twitter card tags
+- [x] OG preview image (`/og-image.svg` — 1200×630)
+- [x] `robots.txt` allowing crawl, disallowing `/api/`
+- [x] `sitemap.xml` with all anchor sections
+- [x] JSON-LD `SoftwareApplication` schema
+- [x] Canonical URL
+- [x] Mobile responsive (tested at 768px and 420px)
+
+---
+
 Built by Tanmay Shinde.

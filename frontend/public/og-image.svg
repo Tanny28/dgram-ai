@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#000000"/>
+      <stop offset="100%" stop-color="#0a1a1f"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="35%" r="55%">
+      <stop offset="0%" stop-color="#6bfff7" stop-opacity="0.18"/>
+      <stop offset="55%" stop-color="#fafb63" stop-opacity="0.06"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="60" height="60" patternUnits="userSpaceOnUse">
+      <path d="M 60 0 L 0 0 0 60" fill="none" stroke="#6bfff7" stroke-opacity="0.06" stroke-width="1"/>
+    </pattern>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect width="1200" height="630" fill="url(#grid)"/>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+
+  <!-- accent top bar -->
+  <rect x="0" y="0" width="1200" height="4" fill="#6bfff7"/>
+  <rect x="0" y="0" width="600" height="4" fill="#fafb63"/>
+
+  <!-- Logo -->
+  <g transform="translate(80, 90)">
+    <path d="M48 4 C48 4 8 4 8 30 C8 56 48 56 48 56"
+          stroke="#aaff45" stroke-width="9" stroke-linecap="round" fill="none"/>
+    <path d="M48 17 C48 17 24 17 24 30 C24 43 48 43 48 43"
+          stroke="#aaff45" stroke-width="7" stroke-linecap="round" fill="none"/>
+    <line x1="48" y1="4" x2="48" y2="56"
+          stroke="#aaff45" stroke-width="9" stroke-linecap="round"/>
+    <text x="70" y="46" font-family="Arial Black, Arial, sans-serif" font-size="38" font-weight="900" letter-spacing="-1">
+      <tspan fill="#ffffff">iagram</tspan><tspan fill="#aaff45">.ai</tspan>
+    </text>
+  </g>
+
+  <!-- Badge -->
+  <g transform="translate(80, 210)">
+    <rect x="0" y="0" width="280" height="38" fill="none" stroke="#6bfff7" stroke-opacity="0.4"/>
+    <circle cx="22" cy="19" r="4" fill="#6bfff7"/>
+    <text x="38" y="25" font-family="JetBrains Mono, monospace" font-size="14" fill="#6bfff7" letter-spacing="0.5">
+      correct by construction
+    </text>
+  </g>
+
+  <!-- Main headline -->
+  <text x="80" y="330" font-family="Arial Black, Arial, sans-serif" font-size="74" font-weight="900" fill="#daedf4" letter-spacing="-3">
+    Plain English →
+  </text>
+  <text x="80" y="412" font-family="Arial Black, Arial, sans-serif" font-size="74" font-weight="900" letter-spacing="-3">
+    <tspan fill="#6bfff7">engineering</tspan> <tspan fill="#fafb63">diagrams.</tspan>
+  </text>
+
+  <!-- Subline -->
+  <text x="80" y="478" font-family="Arial, sans-serif" font-size="22" fill="#5a8090">
+    Verified specs. Deterministic rendering. Solved math.
+  </text>
+
+  <!-- Stat chips -->
+  <g transform="translate(80, 520)" font-family="JetBrains Mono, monospace" font-size="13">
+    <g>
+      <rect x="0" y="0" width="120" height="36" fill="none" stroke="#1a3040"/>
+      <text x="60" y="23" fill="#fafb63" text-anchor="middle">&lt;100ms</text>
+    </g>
+    <g transform="translate(132, 0)">
+      <rect x="0" y="0" width="120" height="36" fill="none" stroke="#1a3040"/>
+      <text x="60" y="23" fill="#6bfff7" text-anchor="middle">6 diagram types</text>
+    </g>
+    <g transform="translate(264, 0)">
+      <rect x="0" y="0" width="160" height="36" fill="none" stroke="#1a3040"/>
+      <text x="80" y="23" fill="#daedf4" text-anchor="middle">free for students</text>
+    </g>
+  </g>
+
+  <!-- Right-side hint: schematic-style decoration -->
+  <g transform="translate(820, 200)" stroke="#6bfff7" stroke-opacity="0.55" stroke-width="2" fill="none">
+    <line x1="0" y1="60" x2="80" y2="60"/>
+    <rect x="80" y="40" width="80" height="40"/>
+    <text x="120" y="65" font-family="JetBrains Mono, monospace" font-size="14" fill="#fafb63" text-anchor="middle" stroke="none">1kΩ</text>
+    <line x1="160" y1="60" x2="240" y2="60"/>
+    <line x1="240" y1="40" x2="240" y2="80"/>
+    <line x1="232" y1="80" x2="248" y2="80"/>
+    <line x1="236" y1="88" x2="244" y2="88"/>
+    <text x="270" y="65" font-family="JetBrains Mono, monospace" font-size="14" fill="#fafb63" stroke="none">100nF</text>
+    <line x1="240" y1="60" x2="320" y2="60"/>
+    <text x="330" y="65" font-family="JetBrains Mono, monospace" font-size="13" fill="#6bfff7" stroke="none">→ V_out</text>
+    <text x="0" y="20" font-family="JetBrains Mono, monospace" font-size="12" fill="#5a8090" stroke="none">fc = 1591.5 Hz</text>
+  </g>
+</svg>
