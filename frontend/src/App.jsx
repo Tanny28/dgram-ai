@@ -86,44 +86,68 @@ function SpecView({ spec }) {
   return <pre className="spec-pre" dangerouslySetInnerHTML={{ __html: html }} />
 }
 
+// Global mermaid load promise — prevents duplicate <script> injection on rapid calls
+let mermaidReady = null
+function loadMermaid() {
+  if (mermaidReady) return mermaidReady
+  mermaidReady = new Promise((resolve, reject) => {
+    if (window.mermaid) { resolve(); return }
+    const s = document.createElement('script')
+    s.src = 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js'
+    s.onload = () => {
+      window.mermaid.initialize({
+        startOnLoad: false,
+        theme: 'neutral',          // light theme → always visible on white canvas
+        fontFamily: 'JetBrains Mono, monospace',
+      })
+      resolve()
+    }
+    s.onerror = reject
+    document.head.appendChild(s)
+  })
+  return mermaidReady
+}
+
 function MermaidView({ code }) {
   const ref = useRef(null)
   const [loaded, setLoaded] = useState(false)
+  const [renderError, setRenderError] = useState('')
 
   useEffect(() => {
     if (!code || !ref.current) return
     let cancelled = false
+    setLoaded(false)
+    setRenderError('')
 
-    async function render() {
-      if (!window.mermaid) {
-        const s = document.createElement('script')
-        s.src = 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js'
-        s.onload = () => {
-          window.mermaid.initialize({ startOnLoad: false, theme: 'dark', fontFamily: 'JetBrains Mono, monospace' })
-          if (!cancelled) doRender()
+    loadMermaid().then(async () => {
+      if (cancelled) return
+      try {
+        const id = 'mermaid-' + Date.now()
+        const { svg } = await window.mermaid.render(id, code)
+        if (!cancelled && ref.current) {
+          ref.current.innerHTML = svg
+          setLoaded(true)
         }
-        document.head.appendChild(s)
-      } else {
-        doRender()
+      } catch (e) {
+        console.error('mermaid render:', e)
+        if (!cancelled) setRenderError(code)
       }
+    }).catch(e => {
+      console.error('mermaid load failed:', e)
+      if (!cancelled) setRenderError(code)
+    })
 
-      async function doRender() {
-        try {
-          const id = 'mermaid-' + Date.now()
-          const { svg } = await window.mermaid.render(id, code)
-          if (!cancelled && ref.current) {
-            ref.current.innerHTML = svg
-            setLoaded(true)
-          }
-        } catch (e) {
-          console.error('mermaid render:', e)
-          if (ref.current) ref.current.textContent = code
-        }
-      }
-    }
-    render()
     return () => { cancelled = true }
   }, [code])
+
+  if (renderError) {
+    return (
+      <div className="canvas canvas-empty" style={{ minHeight: 200, flexDirection: 'column', gap: 8 }}>
+        <span style={{ color: 'var(--yellow)', marginBottom: 8 }}>⚠ mermaid render failed</span>
+        <pre style={{ fontSize: 11, color: 'var(--text-dim)', whiteSpace: 'pre-wrap', textAlign: 'left', maxWidth: '100%' }}>{renderError}</pre>
+      </div>
+    )
+  }
 
   return (
     <div className="canvas mermaid-canvas">
@@ -338,7 +362,7 @@ export default function App() {
                       )}
                     </>
                   ) : (
-                    <div className="canvas canvas-empty" style={{ minHeight: 120 }}>
+                    <div className="canvas canvas-empty" style={{ minHeight: 120, color: 'var(--text-dim)' }}>
                       {result.kind === 'circuit'
                         ? 'add component values to solve'
                         : `${result.kind} — visual output only`}

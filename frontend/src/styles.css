@@ -585,18 +585,19 @@ body::after {
 }
 .canvas img { max-width: 100%; height: auto; display: block; }
 .canvas-empty {
-  background: #040404;
-  color: var(--text-faint);
+  background: #0a0a0a;
+  color: var(--text-dim);       /* was --text-faint (#253a44) — near-invisible on dark bg */
   font-family: var(--mono);
   font-size: 13px;
   text-align: center;
+  border: 1px dashed var(--border-hi);
 }
 .mermaid-canvas {
-  background: #0a0a0a;
+  background: #ffffff;          /* white — mermaid neutral theme needs light bg to be visible */
   min-height: 240px;
 }
 .canvas-hint {
-  color: var(--text-faint);
+  color: var(--text-dim);       /* was --text-faint — too dark to read */
   font-family: var(--mono);
   font-size: 12px;
 }
