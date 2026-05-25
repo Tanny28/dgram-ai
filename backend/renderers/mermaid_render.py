@@ -17,6 +17,22 @@ _SHAPE_MAP = {
     "stadium": ('(["', '"])'),
 }
 
+# Mermaid reserves these tokens — using them as node IDs breaks the parser
+# (`end` closes a subgraph block, `start`/`default`/etc. have grammar meaning).
+# LLMs love to name nodes "start" and "end", so we prefix any reserved id.
+_MERMAID_RESERVED = {
+    "end", "start", "default", "subgraph", "direction",
+    "class", "classDef", "style", "click", "linkStyle",
+    "graph", "flowchart", "state", "stateDiagram",
+}
+
+
+def _safe_id(node_id: str) -> str:
+    """Prefix reserved mermaid keywords with `n_` to avoid parser collisions."""
+    if node_id.lower() in _MERMAID_RESERVED:
+        return f"n_{node_id}"
+    return node_id
+
 
 def render_mermaid(spec: GraphSpec, kind: DiagramKind = DiagramKind.FLOWCHART) -> str:
     """Return a mermaid diagram definition string."""
@@ -34,15 +50,16 @@ def render_mermaid(spec: GraphSpec, kind: DiagramKind = DiagramKind.FLOWCHART) -
         l, r = _SHAPE_MAP.get(n.shape, _SHAPE_MAP["box"])
         # strip chars that break mermaid's parser inside node labels
         safe = n.label.replace('"', "'").replace('(', '[').replace(')', ']')
-        lines.append(f'    {n.id}{l}{safe}{r}')
+        lines.append(f'    {_safe_id(n.id)}{l}{safe}{r}')
 
     for e in spec.edges:
+        src, tgt = _safe_id(e.source), _safe_id(e.target)
         if e.label:
             # quote-free pipe labels — avoid parser issues with special chars
             safe = e.label.replace('"', "'").replace('|', '/').replace('[', '(').replace(']', ')')
-            lines.append(f'    {e.source} -->|{safe}| {e.target}')
+            lines.append(f'    {src} -->|{safe}| {tgt}')
         else:
-            lines.append(f'    {e.source} --> {e.target}')
+            lines.append(f'    {src} --> {tgt}')
 
     return "\n".join(lines)
 
@@ -52,13 +69,13 @@ def _sequence(spec: GraphSpec) -> str:
     for n in spec.nodes:
         # sanitize participant labels — strip chars that break the parser
         safe_label = n.label.replace('"', "'").replace(':', '-').replace('\n', ' ')
-        lines.append(f"    participant {n.id} as {safe_label}")
+        lines.append(f"    participant {_safe_id(n.id)} as {safe_label}")
     for e in spec.edges:
         label = (e.label or "").replace('"', "'").replace(':', '-').strip() or "call"
         # Use plain ->> (no activation +) — activation boxes require matching
         # deactivation lines that the LLM/offline spec never emits, causing
         # mermaid v10/v11 to throw a parse error.
-        lines.append(f"    {e.source}->>{e.target}: {label}")
+        lines.append(f"    {_safe_id(e.source)}->>{_safe_id(e.target)}: {label}")
     return "\n".join(lines)
 
 
@@ -67,13 +84,14 @@ def _state(spec: GraphSpec) -> str:
     for n in spec.nodes:
         # strip chars that break stateDiagram-v2 parser (:, ?, [, {)
         safe = n.label.replace(':', '-').replace('?', '').replace('[', '(').replace(']', ')').replace('{', '(').replace('}', ')')
-        lines.append(f"    {n.id}: {safe}")
+        lines.append(f"    {_safe_id(n.id)}: {safe}")
     for e in spec.edges:
+        src, tgt = _safe_id(e.source), _safe_id(e.target)
         if e.label:
             safe_label = e.label.replace(':', '-').replace('?', '').strip()
-            lines.append(f"    {e.source} --> {e.target}: {safe_label}")
+            lines.append(f"    {src} --> {tgt}: {safe_label}")
         else:
-            lines.append(f"    {e.source} --> {e.target}")
+            lines.append(f"    {src} --> {tgt}")
     return "\n".join(lines)
 
 
