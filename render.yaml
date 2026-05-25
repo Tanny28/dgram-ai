@@ -5,13 +5,6 @@ services:
     plan: free
     healthCheckPath: /api/health
 
-    # Persistent disk for SQLite. The 1 GB free tier is plenty for
-    # users + history rows (history is just text strings).
-    disk:
-      name: dgram-ai-data
-      mountPath: /data
-      sizeGB: 1
-
     envVars:
       - key: GROQ_API_KEY
         sync: false              # set manually in Render dashboard
