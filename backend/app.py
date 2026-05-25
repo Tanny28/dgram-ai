@@ -46,6 +46,11 @@ class GenerateRequest(BaseModel):
     prompt: str
 
 
+class RerenderRequest(BaseModel):
+    kind: str          # 'circuit' | 'flowchart' | 'block' | 'sequence' | 'state' | 'physics'
+    spec: dict         # the full spec dict (matches CircuitSpec / GraphSpec / PhysicsSpec shape)
+
+
 class GenerateResponse(BaseModel):
     ok: bool
     kind: str
@@ -62,19 +67,16 @@ def health():
     return {"status": "ok", "groq_key_present": bool(os.environ.get("GROQ_API_KEY"))}
 
 
-@app.post("/api/generate", response_model=GenerateResponse)
-def generate(req: GenerateRequest):
-    t0 = time.time()
-
-    route = route_prompt(req.prompt)
-    spec = build_spec(req.prompt, route)
-
+def _render_and_solve(kind: DiagramKind, spec) -> dict:
+    """Shared pipeline: take a validated spec, render it, run the solver.
+    Returns dict with image_b64, mermaid_code, solution_payload.
+    Used by both /api/generate (after LLM) and /api/rerender (no LLM)."""
     image_b64 = ""
     mermaid_code = ""
     solution_payload = {"solvable": False, "summary": "", "steps": [], "quantities": {}}
 
     try:
-        if route.kind == DiagramKind.CIRCUIT and isinstance(spec, CircuitSpec):
+        if kind == DiagramKind.CIRCUIT and isinstance(spec, CircuitSpec):
             png = render_circuit(spec)
             image_b64 = base64.b64encode(png).decode("ascii")
             sol = solver_mod.solve(spec)
@@ -86,32 +88,99 @@ def generate(req: GenerateRequest):
                     "quantities": sol.quantities,
                 }
 
-        elif route.kind == DiagramKind.PHYSICS and isinstance(spec, PhysicsSpec):
+        elif kind == DiagramKind.PHYSICS and isinstance(spec, PhysicsSpec):
             png = render_physics(spec)
             image_b64 = base64.b64encode(png).decode("ascii")
 
-        elif route.kind == DiagramKind.BLOCK and isinstance(spec, GraphSpec):
+        elif kind == DiagramKind.BLOCK and isinstance(spec, GraphSpec):
             png = render_graphviz(spec)
             image_b64 = base64.b64encode(png).decode("ascii")
 
-        elif route.kind in (DiagramKind.FLOWCHART, DiagramKind.SEQUENCE,
-                            DiagramKind.STATE) and isinstance(spec, GraphSpec):
-            mermaid_code = render_mermaid(spec, route.kind)
+        elif kind in (DiagramKind.FLOWCHART, DiagramKind.SEQUENCE,
+                      DiagramKind.STATE) and isinstance(spec, GraphSpec):
+            mermaid_code = render_mermaid(spec, kind)
 
     except Exception as e:
-        print(f"[api] render error for {route.kind}: {e}")
+        print(f"[api] render error for {kind}: {e}")
         solution_payload["summary"] = f"Render error: {e}"
+
+    return {
+        "image_b64": image_b64,
+        "mermaid_code": mermaid_code,
+        "solution": solution_payload,
+    }
+
+
+@app.post("/api/generate", response_model=GenerateResponse)
+def generate(req: GenerateRequest):
+    t0 = time.time()
+
+    route = route_prompt(req.prompt)
+    spec = build_spec(req.prompt, route)
+    out = _render_and_solve(route.kind, spec)
 
     return GenerateResponse(
         ok=True,
         kind=route.kind.value,
         title=getattr(spec, "title", ""),
         spec=spec.model_dump(),
-        image_b64=image_b64,
-        mermaid_code=mermaid_code,
-        solution=solution_payload,
+        image_b64=out["image_b64"],
+        mermaid_code=out["mermaid_code"],
+        solution=out["solution"],
         meta={
             "routing_reason": route.reasoning,
+            "elapsed_ms": int((time.time() - t0) * 1000),
+            "offline": not bool(os.environ.get("GROQ_API_KEY")),
+        },
+    )
+
+
+@app.post("/api/rerender", response_model=GenerateResponse)
+def rerender(req: RerenderRequest):
+    """Re-render and re-solve from a modified spec — no LLM call.
+    Lets the frontend tweak component values (1kOhm -> 5kOhm) and get
+    a fresh diagram + solved math in <100ms."""
+    t0 = time.time()
+
+    # parse kind enum
+    try:
+        kind = DiagramKind(req.kind)
+    except ValueError:
+        return GenerateResponse(
+            ok=False, kind=req.kind, title="", spec=req.spec,
+            image_b64="", mermaid_code="",
+            solution={"solvable": False, "summary": f"unknown kind: {req.kind}", "steps": [], "quantities": {}},
+            meta={"elapsed_ms": 0, "offline": True, "routing_reason": "rerender"},
+        )
+
+    # validate spec against the right schema
+    try:
+        if kind == DiagramKind.CIRCUIT:
+            spec = CircuitSpec(**req.spec)
+        elif kind == DiagramKind.PHYSICS:
+            spec = PhysicsSpec(**req.spec)
+        else:
+            spec = GraphSpec(**req.spec)
+    except Exception as e:
+        return GenerateResponse(
+            ok=False, kind=req.kind, title="", spec=req.spec,
+            image_b64="", mermaid_code="",
+            solution={"solvable": False, "summary": f"spec validation failed: {e}", "steps": [], "quantities": {}},
+            meta={"elapsed_ms": 0, "offline": True, "routing_reason": "rerender"},
+        )
+
+    out = _render_and_solve(kind, spec)
+
+    return GenerateResponse(
+        ok=True,
+        kind=kind.value,
+        title=getattr(spec, "title", ""),
+        spec=spec.model_dump(),
+        image_b64=out["image_b64"],
+        mermaid_code=out["mermaid_code"],
+        solution=out["solution"],
+        meta={
+            "routing_reason": "rerender (no LLM)",
             "elapsed_ms": int((time.time() - t0) * 1000),
             "offline": not bool(os.environ.get("GROQ_API_KEY")),
         },

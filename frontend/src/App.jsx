@@ -368,6 +368,137 @@ function decodeShare(p) {
   try { return decodeURIComponent(escape(atob(p))) } catch { return null }
 }
 
+// ══════════════════════════════════════════
+//  TWEAK PANEL — edit spec values live, no LLM
+// ══════════════════════════════════════════
+
+function TweakPanel({ result, onRerendered, flashToast }) {
+  const [editedSpec, setEditedSpec] = useState(result.spec)
+  const [pending, setPending] = useState(false)
+  const [lastMs, setLastMs] = useState(null)
+  const debounceRef = useRef(null)
+
+  // when a fresh result comes in (new prompt), reset editor
+  useEffect(() => { setEditedSpec(result.spec); setLastMs(null) }, [result.spec])
+
+  async function doRerender(spec) {
+    setPending(true)
+    const t0 = performance.now()
+    try {
+      const res = await fetch('/api/rerender', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: result.kind, spec }),
+      })
+      const data = await res.json()
+      setLastMs(Math.round(performance.now() - t0))
+      if (data.ok) onRerendered(data)
+      else flashToast?.('spec validation failed')
+    } catch (e) {
+      console.error(e)
+      flashToast?.('rerender failed')
+    } finally {
+      setPending(false)
+    }
+  }
+
+  function scheduleRerender(spec) {
+    clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => doRerender(spec), 350)
+  }
+
+  function updateComponentLabel(idx, newLabel) {
+    const next = {
+      ...editedSpec,
+      components: editedSpec.components.map((c, i) =>
+        i === idx ? { ...c, label: newLabel } : c
+      ),
+    }
+    setEditedSpec(next)
+    scheduleRerender(next)
+  }
+
+  function applyPreset(idx, preset) {
+    updateComponentLabel(idx, preset)
+  }
+
+  // only circuits have meaningful tweakable values right now
+  if (result.kind !== 'circuit') return null
+
+  // skip ground / wires / labels-less components in the editor
+  const tweakable = editedSpec.components
+    .map((c, i) => ({ c, i }))
+    .filter(({ c }) => c.type !== 'ground' && c.label && c.label.trim() !== '')
+
+  if (tweakable.length === 0) return null
+
+  return (
+    <div className="result-panel result-panel--full tweak-panel">
+      <div className="rp-head">
+        <span className="rp-label">⚡ tweak values · no LLM call</span>
+        <span className="rp-tag" style={{
+          color: pending ? 'var(--cyan)' : 'var(--yellow)',
+          borderColor: pending ? 'rgba(107, 255, 247, 0.4)' : 'rgba(250, 251, 99, 0.3)',
+        }}>
+          {pending ? 'RECOMPUTING…' : lastMs !== null ? `${lastMs}ms` : 'LIVE'}
+        </span>
+      </div>
+      <div className="rp-body">
+        <p className="tweak-desc">
+          Change any component value below — the diagram <em>and the solved math</em> update in real-time.
+          <strong> No LLM call.</strong> This is the spec-is-source-of-truth thesis: every render comes from
+          a structured spec, so editing the spec deterministically updates the result.
+        </p>
+
+        <div className="tweak-grid">
+          {tweakable.map(({ c, i }) => (
+            <div className="tweak-row" key={c.id}>
+              <div className="tweak-header">
+                <span className="tweak-id">{c.id}</span>
+                <span className="tweak-type">{c.type}</span>
+              </div>
+              <input
+                className="tweak-input"
+                value={c.label}
+                onChange={e => updateComponentLabel(i, e.target.value)}
+                placeholder="e.g. 1kOhm, 100nF, 5V"
+              />
+              {c.type === 'resistor' && (
+                <div className="tweak-presets">
+                  {['100Ohm', '1kOhm', '10kOhm', '100kOhm', '1MOhm'].map(p => (
+                    <button key={p} className="preset-btn" onClick={() => applyPreset(i, p)}>{p}</button>
+                  ))}
+                </div>
+              )}
+              {c.type === 'capacitor' && (
+                <div className="tweak-presets">
+                  {['10pF', '1nF', '10nF', '100nF', '1uF', '10uF'].map(p => (
+                    <button key={p} className="preset-btn" onClick={() => applyPreset(i, p)}>{p}</button>
+                  ))}
+                </div>
+              )}
+              {c.type === 'inductor' && (
+                <div className="tweak-presets">
+                  {['1uH', '10uH', '100uH', '1mH', '10mH', '100mH'].map(p => (
+                    <button key={p} className="preset-btn" onClick={() => applyPreset(i, p)}>{p}</button>
+                  ))}
+                </div>
+              )}
+              {(c.type === 'source_v' || c.type === 'battery' || c.type === 'source_sin') && (
+                <div className="tweak-presets">
+                  {['1V', '3.3V', '5V', '9V', '12V', '24V'].map(p => (
+                    <button key={p} className="preset-btn" onClick={() => applyPreset(i, p)}>{p}</button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── tiny IconBtn ──
 function IconBtn({ onClick, children, title, hot }) {
   return (
@@ -774,6 +905,13 @@ export default function App() {
                   )}
                 </div>
               </div>
+
+              {/* TWEAK PANEL — interactive value editor (circuits only) */}
+              <TweakPanel
+                result={result}
+                flashToast={flashToast}
+                onRerendered={data => setResult(prev => ({ ...prev, ...data }))}
+              />
 
               {/* spec panel */}
               <div className="result-panel result-panel--full">

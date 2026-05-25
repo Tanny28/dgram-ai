@@ -969,6 +969,118 @@ body::after {
 }
 
 /* ══════════════════════════════════════════
+   TWEAK PANEL (interactive value editor)
+   ══════════════════════════════════════════ */
+.tweak-panel {
+  background: linear-gradient(180deg, #000 0%, var(--bg2) 100%);
+  border: 1px solid var(--cyan-glow);
+  position: relative;
+  overflow: hidden;
+}
+.tweak-panel::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--cyan), var(--yellow), var(--cyan));
+  background-size: 200% 100%;
+  animation: shimmer 4s linear infinite;
+}
+
+.tweak-desc {
+  font-family: var(--body);
+  font-size: 14px;
+  color: var(--text-dim);
+  line-height: 1.65;
+  margin-bottom: 20px;
+  max-width: 720px;
+}
+.tweak-desc em {
+  color: var(--cyan);
+  font-style: normal;
+  font-weight: 600;
+}
+.tweak-desc strong {
+  color: var(--yellow);
+  font-weight: 600;
+}
+
+.tweak-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.tweak-row {
+  background: #000;
+  border: 1px solid var(--border);
+  padding: 14px;
+  transition: border-color 0.15s;
+}
+.tweak-row:focus-within {
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 1px var(--cyan), 0 0 20px var(--cyan-dim);
+}
+
+.tweak-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.tweak-id {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--yellow);
+  background: var(--yellow-dim);
+  padding: 2px 8px;
+}
+.tweak-type {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.tweak-input {
+  width: 100%;
+  background: transparent;
+  border: 1px solid var(--border);
+  outline: none;
+  font-family: var(--mono);
+  font-size: 16px;
+  color: var(--cyan);
+  padding: 10px 12px;
+  caret-color: var(--cyan);
+  transition: border-color 0.15s;
+}
+.tweak-input:focus { border-color: var(--cyan); }
+
+.tweak-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 10px;
+}
+.preset-btn {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  background: transparent;
+  border: 1px solid var(--border);
+  padding: 4px 8px;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.preset-btn:hover {
+  border-color: var(--yellow);
+  color: var(--yellow);
+  background: var(--yellow-dim);
+}
+
+/* ══════════════════════════════════════════
    ACTION TOOLBAR (download / share buttons)
    ══════════════════════════════════════════ */
 .result-toolbar {
