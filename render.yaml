@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: dgram-ai
+    runtime: docker
+    plan: free
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false
+    healthCheckPath: /api/health
