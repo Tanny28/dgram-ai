@@ -213,7 +213,9 @@ export default function App() {
       {/* ── NAV ── */}
       <nav className={`nav ${navScrolled ? 'nav--scrolled' : ''}`}>
         <div className="nav-inner">
-          <a href="#" className="nav-logo">diagram<span>AI</span></a>
+          <a href="#" className="nav-logo">
+            <img src="/logo.svg" alt="Diagram.ai" className="nav-logo-img" />
+          </a>
           <div className="nav-links">
             <a href="#features">Features</a>
             <a href="#how">How it works</a>
@@ -475,7 +477,9 @@ export default function App() {
       {/* ── FOOTER ── */}
       <footer className="footer">
         <div className="footer-inner">
-          <div className="footer-logo">diagram<span>AI</span></div>
+          <div className="footer-logo">
+            <img src="/logo.svg" alt="Diagram.ai" className="footer-logo-img" />
+          </div>
           <div className="footer-links">
             <a href="#try">Generator</a>
             <a href="#features">Features</a>

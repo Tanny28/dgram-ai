@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 80" fill="none">
+  <!-- D icon: outer C arc + inner vertical bar -->
+  <g>
+    <!-- Outer rounded C shape -->
+    <path d="M52 12 C28 12 12 26 12 40 C12 54 28 68 52 68"
+          stroke="#aaff45" stroke-width="9" stroke-linecap="round" fill="none"/>
+    <!-- Inner C shape (smaller) -->
+    <path d="M44 24 C32 24 24 31 24 40 C24 49 32 56 44 56"
+          stroke="#aaff45" stroke-width="7" stroke-linecap="round" fill="none"/>
+    <!-- Vertical bar (right side of D) -->
+    <line x1="52" y1="12" x2="52" y2="68" stroke="#aaff45" stroke-width="9" stroke-linecap="round"/>
+  </g>
+
+  <!-- "iagram" in white -->
+  <text x="68" y="53" font-family="'Syne', 'Barlow', sans-serif" font-weight="700"
+        font-size="36" fill="#ffffff" letter-spacing="-0.5">iagram</text>
+
+  <!-- ".ai" in green -->
+  <text x="214" y="53" font-family="'Syne', 'Barlow', sans-serif" font-weight="700"
+        font-size="36" fill="#aaff45" letter-spacing="-0.5">.ai</text>
+
+  <!-- TM superscript -->
+  <text x="296" y="24" font-family="'Barlow', sans-serif" font-weight="400"
+        font-size="11" fill="#ffffff" opacity="0.7">TM</text>
+</svg>
