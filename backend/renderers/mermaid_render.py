@@ -28,17 +28,19 @@ def render_mermaid(spec: GraphSpec, kind: DiagramKind = DiagramKind.FLOWCHART) -
 
     # flowchart / block
     direction = spec.direction if spec.direction in ("TD", "LR", "BT", "RL") else "TD"
-    lines = [f"graph {direction}"]
+    lines = [f"flowchart {direction}"]
 
     for n in spec.nodes:
         l, r = _SHAPE_MAP.get(n.shape, _SHAPE_MAP["box"])
-        safe = n.label.replace('"', "'")
+        # strip chars that break mermaid's parser inside node labels
+        safe = n.label.replace('"', "'").replace('(', '[').replace(')', ']')
         lines.append(f'    {n.id}{l}{safe}{r}')
 
     for e in spec.edges:
         if e.label:
-            safe = e.label.replace('"', "'")
-            lines.append(f'    {e.source} -->|"{safe}"| {e.target}')
+            # quote-free pipe labels — avoid parser issues with special chars
+            safe = e.label.replace('"', "'").replace('|', '/').replace('[', '(').replace(']', ')')
+            lines.append(f'    {e.source} -->|{safe}| {e.target}')
         else:
             lines.append(f'    {e.source} --> {e.target}')
 
@@ -48,20 +50,30 @@ def render_mermaid(spec: GraphSpec, kind: DiagramKind = DiagramKind.FLOWCHART) -
 def _sequence(spec: GraphSpec) -> str:
     lines = ["sequenceDiagram"]
     for n in spec.nodes:
-        lines.append(f"    participant {n.id} as {n.label}")
+        # sanitize participant labels — strip chars that break the parser
+        safe_label = n.label.replace('"', "'").replace(':', '-').replace('\n', ' ')
+        lines.append(f"    participant {n.id} as {safe_label}")
     for e in spec.edges:
-        label = e.label or " "
-        lines.append(f"    {e.source}->>+{e.target}: {label}")
+        label = (e.label or "").replace('"', "'").replace(':', '-').strip() or "call"
+        # Use plain ->> (no activation +) — activation boxes require matching
+        # deactivation lines that the LLM/offline spec never emits, causing
+        # mermaid v10/v11 to throw a parse error.
+        lines.append(f"    {e.source}->>{e.target}: {label}")
     return "\n".join(lines)
 
 
 def _state(spec: GraphSpec) -> str:
     lines = ["stateDiagram-v2"]
     for n in spec.nodes:
-        lines.append(f"    {n.id} : {n.label}")
+        # strip chars that break stateDiagram-v2 parser (:, ?, [, {)
+        safe = n.label.replace(':', '-').replace('?', '').replace('[', '(').replace(']', ')').replace('{', '(').replace('}', ')')
+        lines.append(f"    {n.id}: {safe}")
     for e in spec.edges:
-        label = f" : {e.label}" if e.label else ""
-        lines.append(f"    {e.source} --> {e.target}{label}")
+        if e.label:
+            safe_label = e.label.replace(':', '-').replace('?', '').strip()
+            lines.append(f"    {e.source} --> {e.target}: {safe_label}")
+        else:
+            lines.append(f"    {e.source} --> {e.target}")
     return "\n".join(lines)
 
 
