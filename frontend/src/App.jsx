@@ -369,6 +369,82 @@ function decodeShare(p) {
 }
 
 // ══════════════════════════════════════════
+//  EMAIL CAPTURE MODAL
+// ══════════════════════════════════════════
+
+const EMAIL_KEY = 'diagram-ai-email'
+const EMAIL_DISMISSED_KEY = 'diagram-ai-email-dismissed'
+
+function emailAlreadyCollected() {
+  return !!localStorage.getItem(EMAIL_KEY) || !!localStorage.getItem(EMAIL_DISMISSED_KEY)
+}
+
+function saveEmail(email, isEdu) {
+  localStorage.setItem(EMAIL_KEY, JSON.stringify({ email, isEdu, ts: Date.now() }))
+}
+
+function dismissEmail() {
+  localStorage.setItem(EMAIL_DISMISSED_KEY, Date.now().toString())
+}
+
+function EmailModal({ onClose, flashToast }) {
+  const [email, setEmail] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const isValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+  const isEdu = /\.edu(\.[a-z]{2,})?$/i.test(email) || /\.ac\.[a-z]{2,}$/i.test(email)
+
+  async function submit(e) {
+    e?.preventDefault?.()
+    if (!isValid || submitting) return
+    setSubmitting(true)
+    saveEmail(email, isEdu)
+    flashToast(isEdu ? '🎓 EDU verified — Pro features unlocked!' : '✓ 100 free credits added to your account')
+    setTimeout(onClose, 1200)
+  }
+
+  return (
+    <>
+      <div className="email-overlay" onClick={onClose} />
+      <div className="email-modal" role="dialog" aria-labelledby="email-title">
+        <button className="em-close" onClick={onClose} type="button">✕</button>
+        <div className="em-badge">EARLY ACCESS</div>
+        <h3 className="em-title" id="email-title">
+          Get <span className="grad-text">100 free credits</span><br />— or unlimited if you&apos;re a student.
+        </h3>
+        <p className="em-desc">
+          We&apos;re launching <strong>Diagram.ai Pro</strong> with PDF lab reports, unlimited generations,
+          and private history sync. Verified <code>.edu</code> emails get it <strong>free forever</strong>.
+        </p>
+        <form className="em-form" onSubmit={submit}>
+          <input
+            type="email"
+            className="em-input"
+            placeholder="you@university.edu"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            autoFocus
+            required
+          />
+          <button type="submit" className="em-submit" disabled={!isValid || submitting}>
+            {submitting ? '✓' : isEdu ? 'Claim free Pro →' : 'Claim 100 credits →'}
+          </button>
+        </form>
+        {isValid && isEdu && (
+          <div className="em-edu-flash">🎓 Detected EDU email — you&apos;ll get Pro free.</div>
+        )}
+        <div className="em-perks">
+          <div className="em-perk"><span>✓</span> Unlimited diagram generations</div>
+          <div className="em-perk"><span>✓</span> Branded PDF lab reports</div>
+          <div className="em-perk"><span>✓</span> Cloud history + shareable links</div>
+          <div className="em-perk"><span>✓</span> Priority Groq inference</div>
+        </div>
+        <button className="em-skip" onClick={onClose} type="button">Maybe later</button>
+      </div>
+    </>
+  )
+}
+
+// ══════════════════════════════════════════
 //  TWEAK PANEL — edit spec values live, no LLM
 // ══════════════════════════════════════════
 
@@ -522,6 +598,10 @@ export default function App() {
   const [history, setHistory] = useState([])
   const [showHistory, setShowHistory] = useState(false)
   const [toast, setToast] = useState('')
+  const [practice, setPractice] = useState(null)        // active practice problem
+  const [practiceRevealed, setPracticeRevealed] = useState(false)
+  const [showHint, setShowHint] = useState(false)
+  const [showEmail, setShowEmail] = useState(false)
   const diagramAreaRef = useRef(null)
   const toastTimerRef = useRef(null)
 
@@ -557,11 +637,17 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  async function run(p) {
+  async function run(p, opts = {}) {
     const q = (p ?? prompt).trim()
     if (!q || loading) return
     setPrompt(q)
     setLoading(true); setError(''); setResult(null)
+    // clear any active practice context unless this run is FROM a practice problem
+    if (!opts.keepPractice) {
+      setPractice(null)
+      setPracticeRevealed(false)
+      setShowHint(false)
+    }
     try {
       const res = await fetch('/api/generate', {
         method: 'POST',
@@ -571,11 +657,32 @@ export default function App() {
       if (!res.ok) throw new Error(`server returned ${res.status}`)
       const data = await res.json()
       setResult(data)
-      setHistory(pushHistory(q, data.kind, data.title))
+      const newHist = pushHistory(q, data.kind, data.title)
+      setHistory(newHist)
+      // Show email modal after 2nd+ successful generation (once)
+      if (newHist.length >= 2 && !emailAlreadyCollected()) {
+        setTimeout(() => setShowEmail(true), 2500)
+      }
     } catch (e) {
       setError(`generation failed — ${e.message}`)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function loadPracticeProblem() {
+    try {
+      flashToast('loading random problem…')
+      const res = await fetch('/api/practice')
+      if (!res.ok) throw new Error(`server returned ${res.status}`)
+      const p = await res.json()
+      setPractice(p)
+      setPracticeRevealed(false)
+      setShowHint(false)
+      document.getElementById('try')?.scrollIntoView({ behavior: 'smooth' })
+      setTimeout(() => run(p.prompt, { keepPractice: true }), 350)
+    } catch (e) {
+      flashToast('could not load practice problem')
     }
   }
 
@@ -739,6 +846,14 @@ export default function App() {
         </>
       )}
 
+      {/* ── EMAIL CAPTURE MODAL ── */}
+      {showEmail && (
+        <EmailModal
+          onClose={() => { dismissEmail(); setShowEmail(false) }}
+          flashToast={flashToast}
+        />
+      )}
+
       {/* ── TOAST ── */}
       {toast && <div className="toast">{toast}</div>}
 
@@ -783,7 +898,68 @@ export default function App() {
       <section className="generator-section" id="try">
         <div className="section-inner">
           <div className="section-label">// live generator</div>
-          <h2 className="section-h2">Try it now.</h2>
+          <div className="generator-head">
+            <h2 className="section-h2">Try it now.</h2>
+            <button className="practice-btn" onClick={loadPracticeProblem} type="button" title="Get a random engineering practice problem">
+              🎲 Random Practice Problem
+            </button>
+          </div>
+
+          {practice && (
+            <div className="practice-card">
+              <div className="pc-head">
+                <div className="pc-meta">
+                  <span className="pc-tag">📚 PRACTICE</span>
+                  <span className={`pc-diff pc-diff--${practice.difficulty}`}>{practice.difficulty}</span>
+                  <span className="pc-topic">{practice.topic}</span>
+                </div>
+                <button className="pc-next" onClick={loadPracticeProblem} type="button">↻ Next problem</button>
+              </div>
+              <div className="pc-body">
+                <div className="pc-section">
+                  <div className="pc-label">🧠 Challenge</div>
+                  <p className="pc-challenge">{practice.challenge}</p>
+                </div>
+
+                <div className="pc-actions">
+                  {!showHint && !practiceRevealed && (
+                    <button className="pc-action-btn pc-action-btn--ghost" onClick={() => setShowHint(true)}>
+                      💡 Show hint
+                    </button>
+                  )}
+                  {!practiceRevealed && (
+                    <button className="pc-action-btn" onClick={() => setPracticeRevealed(true)}>
+                      ✓ Reveal answer
+                    </button>
+                  )}
+                </div>
+
+                {showHint && (
+                  <div className="pc-hint">
+                    <span className="pc-hint-label">💡 Hint:</span> {practice.hint}
+                  </div>
+                )}
+
+                {practiceRevealed && (
+                  <div className="pc-reveal">
+                    <div className="pc-section">
+                      <div className="pc-label">🎯 Learning objective</div>
+                      <p className="pc-obj">{practice.learning_objective}</p>
+                    </div>
+                    <div className="pc-section">
+                      <div className="pc-label">📐 Solution</div>
+                      <p className="pc-obj" style={{ color: 'var(--text-dim)' }}>
+                        Check the <strong>Solution panel</strong> below for the analytical result with full step-by-step working.
+                        {result?.solution?.summary && (
+                          <span className="pc-result-inline"> → <strong>{result.solution.summary}</strong></span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="terminal">
             <div className="terminal-bar">

@@ -27,6 +27,7 @@ load_dotenv()
 from core.brain import route_prompt, build_spec
 from core.schemas import DiagramKind, CircuitSpec, GraphSpec, PhysicsSpec
 from core import solver as solver_mod
+from core import practice_problems as practice_mod
 from renderers.circuit import render_circuit
 from renderers.graphviz_render import render_graphviz
 from renderers.physics import render_physics
@@ -65,6 +66,28 @@ class GenerateResponse(BaseModel):
 @app.get("/api/health")
 def health():
     return {"status": "ok", "groq_key_present": bool(os.environ.get("GROQ_API_KEY"))}
+
+
+@app.get("/api/practice")
+def practice(difficulty: str = None, topic: str = None):
+    """Get a random practice problem.
+    Optional query params: ?difficulty=easy|medium|hard &topic=RC%20Filter
+    """
+    p = practice_mod.random_problem(difficulty=difficulty, topic=topic)
+    return {
+        "id": p["id"],
+        "topic": p["topic"],
+        "difficulty": p["difficulty"],
+        "prompt": p["prompt"],
+        "challenge": p["challenge"],
+        "learning_objective": p["learning_objective"],
+        "hint": p["hint"],
+    }
+
+
+@app.get("/api/practice/topics")
+def practice_topics():
+    return {"topics": practice_mod.all_topics()}
 
 
 def _render_and_solve(kind: DiagramKind, spec) -> dict:
