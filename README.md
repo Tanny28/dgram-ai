@@ -200,4 +200,4 @@ If `GROQ_API_KEY` is not set or the network is down, DiagramAI falls back to a k
 
 ---
 
-Built by Tanmay Shinde for the Pixaflip interview.
+Built by Tanmay Shinde.
