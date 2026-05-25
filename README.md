@@ -31,8 +31,8 @@ DiagramAI does not generate pixels. It generates a verified structured specifica
 
 ```bash
 # clone
-git clone https://github.com/Tanny28/diagramai.git
-cd diagramai
+git clone https://github.com/Tanny28/dgram-ai.git
+cd dgram-ai
 
 # backend
 cd backend
@@ -154,7 +154,7 @@ Returns `{ status, groq_key_present }`.
 ## Project structure
 
 ```
-diagramai/
+dgram-ai/
   backend/
     app.py                  # FastAPI server
     requirements.txt
@@ -200,4 +200,4 @@ If `GROQ_API_KEY` is not set or the network is down, DiagramAI falls back to a k
 
 ---
 
-Built by Tanmay Deshpande for the Pixaflip interview.
+Built by Tanmay Shinde for the Pixaflip interview.
