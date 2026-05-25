@@ -910,6 +910,7 @@ export default function App() {
             <a href="#types">Diagrams</a>
             <a href="#pricing">Pricing</a>
             <a href="#faq">FAQ</a>
+            <a href="/api-docs">API</a>
           </div>
           <button
             className="nav-history-btn"
@@ -1573,6 +1574,7 @@ export default function App() {
             <a href="#features">Features</a>
             <a href="#pricing">Pricing</a>
             <a href="#faq">FAQ</a>
+            <a href="/api-docs">API docs</a>
             <a href="https://github.com/Tanny28/dgram-ai" target="_blank" rel="noreferrer">GitHub ↗</a>
           </div>
           <div className="footer-copy">v0.1.0 · FastAPI + Groq + SchemDraw + Graphviz</div>
