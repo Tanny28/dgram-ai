@@ -6,3 +6,8 @@ __pycache__/
 *.egg-info/
 .venv/
 venv/
+
+# SQLite database files (local dev only — production uses Render persistent disk)
+*.db
+*.db-journal
+*.sqlite3

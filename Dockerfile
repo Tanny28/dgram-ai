@@ -18,6 +18,12 @@ RUN cd frontend && npm ci && npm run build
 # Backend code
 COPY backend/ backend/
 
+# Persistent data dir for SQLite. Render mounts a disk here in production
+# (configured via render.yaml). Locally this is just an empty folder inside
+# the container — DATABASE_URL falls back to ./diagramai.db if not overridden.
+RUN mkdir -p /data
+ENV DATABASE_URL=sqlite:////data/diagramai.db
+
 EXPOSE 8000
 
 WORKDIR /app/backend

@@ -400,22 +400,68 @@ async function downloadPDF(result, mermaidContainerEl) {
   pdf.save(`${fname}.pdf`)
 }
 
-// ── history (localStorage) ──
+// ── history (localStorage when anonymous, cloud when signed in) ──
 const HISTORY_KEY = 'diagram-ai-history'
+const HISTORY_MIGRATED_KEY = 'diagram-ai-history-migrated'
 const HISTORY_LIMIT = 20
 
-function loadHistory() {
+function loadLocalHistory() {
   try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]') } catch { return [] }
 }
-function persistHistory(arr) {
+function persistLocalHistory(arr) {
   try { localStorage.setItem(HISTORY_KEY, JSON.stringify(arr)) } catch {}
 }
-function pushHistory(prompt, kind, title) {
-  const h = loadHistory().filter(x => x.prompt !== prompt)
+function pushLocalHistory(prompt, kind, title) {
+  const h = loadLocalHistory().filter(x => x.prompt !== prompt)
   h.unshift({ prompt, kind, title, ts: Date.now() })
   const trimmed = h.slice(0, HISTORY_LIMIT)
-  persistHistory(trimmed)
+  persistLocalHistory(trimmed)
   return trimmed
+}
+
+// ── cloud history (when signed in) ──
+async function loadCloudHistory() {
+  try {
+    const res = await fetch('/api/history', { credentials: 'include' })
+    if (!res.ok) return []
+    const data = await res.json()
+    return data.items || []
+  } catch { return [] }
+}
+async function pushCloudHistory(prompt, kind, title) {
+  try {
+    await fetch('/api/history', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt, kind, title }),
+    })
+  } catch (e) { console.error('cloud history push failed:', e) }
+  return loadCloudHistory()
+}
+async function clearCloudHistory() {
+  try {
+    await fetch('/api/history', { method: 'DELETE', credentials: 'include' })
+  } catch (e) { console.error('cloud history clear failed:', e) }
+}
+async function migrateLocalToCloud() {
+  if (localStorage.getItem(HISTORY_MIGRATED_KEY)) return
+  const local = loadLocalHistory()
+  if (local.length === 0) {
+    localStorage.setItem(HISTORY_MIGRATED_KEY, '1')
+    return
+  }
+  try {
+    await fetch('/api/history/bulk', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        items: local.map(h => ({ prompt: h.prompt, kind: h.kind, title: h.title })),
+      }),
+    })
+    localStorage.setItem(HISTORY_MIGRATED_KEY, '1')
+  } catch (e) { console.error('history migration failed:', e) }
 }
 
 // ── share URL (encoded prompt in ?p=) ──
@@ -661,6 +707,11 @@ export default function App() {
   const [showHint, setShowHint] = useState(false)
   const [showEmail, setShowEmail] = useState(false)
   const [faqOpen, setFaqOpen] = useState(null)
+  // ─── Auth state ───
+  const [currentUser, setCurrentUser] = useState(null)   // null = not signed in
+  const [authReady, setAuthReady] = useState(false)      // true after first /api/me call
+  const [authConfig, setAuthConfig] = useState({ google: false })
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
   // ─── Compare mode ───
   const [compareMode, setCompareMode] = useState(false)
   const [variantA, setVariantA] = useState(null)        // snapshot result
@@ -680,14 +731,43 @@ export default function App() {
 
   useEffect(() => {
     fetch('/api/health').then(r => r.json()).then(setHealth).catch(() => setHealth({ status: 'down' }))
+    fetch('/api/auth/config').then(r => r.json()).then(setAuthConfig).catch(() => {})
+
     const onScroll = () => setNavScrolled(window.scrollY > 40)
     window.addEventListener('scroll', onScroll)
 
-    // load saved history
-    setHistory(loadHistory())
+    // Auth + history bootstrap: check /api/me, then load the right history source
+    ;(async () => {
+      try {
+        const res = await fetch('/api/me', { credentials: 'include' })
+        const data = await res.json()
+        if (data.user) {
+          setCurrentUser(data.user)
+          // One-time migration of localStorage history into cloud
+          await migrateLocalToCloud()
+          const cloud = await loadCloudHistory()
+          setHistory(cloud)
+        } else {
+          setHistory(loadLocalHistory())
+        }
+      } catch {
+        setHistory(loadLocalHistory())
+      } finally {
+        setAuthReady(true)
+      }
+    })()
+
+    // Detect post-OAuth callback and clean the URL
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('auth') === 'ok') {
+      flashToast('Signed in')
+      try { window.history.replaceState({}, '', window.location.pathname) } catch {}
+    } else if (params.get('auth_error')) {
+      flashToast(`Sign-in failed (${params.get('auth_error')})`)
+      try { window.history.replaceState({}, '', window.location.pathname) } catch {}
+    }
 
     // honour ?p= shared prompt
-    const params = new URLSearchParams(window.location.search)
     const shared = params.get('p')
     if (shared) {
       const decoded = decodeShare(shared)
@@ -703,6 +783,24 @@ export default function App() {
     return () => window.removeEventListener('scroll', onScroll)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // After login, refresh history; after logout, fall back to localStorage
+  async function signOut() {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
+    } catch {}
+    setCurrentUser(null)
+    setUserMenuOpen(false)
+    setHistory(loadLocalHistory())
+    flashToast('Signed out')
+  }
+  function signIn() {
+    if (!authConfig.google) {
+      flashToast('Google login not configured on this instance')
+      return
+    }
+    window.location.href = '/api/auth/google'
+  }
 
   // keyboard shortcuts: Ctrl/Cmd+K → focus prompt, Ctrl/Cmd+H → history, Escape → close
   useEffect(() => {
@@ -747,10 +845,13 @@ export default function App() {
       if (!res.ok) throw new Error(`server returned ${res.status}`)
       const data = await res.json()
       setResult(data)
-      const newHist = pushHistory(q, data.kind, data.title)
+      // Push to whichever history source matches the current auth state
+      const newHist = currentUser
+        ? await pushCloudHistory(q, data.kind, data.title)
+        : pushLocalHistory(q, data.kind, data.title)
       setHistory(newHist)
-      // Show email modal after 2nd+ successful generation (once)
-      if (newHist.length >= 2 && !emailAlreadyCollected()) {
+      // Show email modal after 2nd+ successful generation (once) — only when not signed in
+      if (!currentUser && newHist.length >= 2 && !emailAlreadyCollected()) {
         setTimeout(() => setShowEmail(true), 2500)
       }
     } catch (e) {
@@ -877,8 +978,12 @@ export default function App() {
     try { window.history.replaceState({}, '', url) } catch {}
     flashToast('share link copied')
   }
-  function actClearHistory() {
-    persistHistory([])
+  async function actClearHistory() {
+    if (currentUser) {
+      await clearCloudHistory()
+    } else {
+      persistLocalHistory([])
+    }
     setHistory([])
     flashToast('history cleared')
   }
@@ -920,6 +1025,56 @@ export default function App() {
           >
             ◷ History{history.length > 0 && <span className="nh-count">{history.length}</span>}
           </button>
+
+          {/* Auth: login button when signed out, user menu when signed in */}
+          {authReady && !currentUser && authConfig.google && (
+            <button
+              className="nav-signin-btn"
+              onClick={signIn}
+              title="Sign in with Google to sync history across devices"
+              type="button"
+            >
+              Sign in
+            </button>
+          )}
+          {authReady && currentUser && (
+            <div className="nav-user">
+              <button
+                className="nav-user-btn"
+                onClick={() => setUserMenuOpen(v => !v)}
+                title={currentUser.email}
+                type="button"
+              >
+                {currentUser.picture ? (
+                  <img src={currentUser.picture} alt="" className="nav-user-avatar" referrerPolicy="no-referrer" />
+                ) : (
+                  <span className="nav-user-initial">
+                    {(currentUser.name || currentUser.email || '?')[0].toUpperCase()}
+                  </span>
+                )}
+              </button>
+              {userMenuOpen && (
+                <>
+                  <div className="nav-user-overlay" onClick={() => setUserMenuOpen(false)} />
+                  <div className="nav-user-menu">
+                    <div className="num-head">
+                      <div className="num-name">{currentUser.name || 'Signed in'}</div>
+                      <div className="num-email">{currentUser.email}</div>
+                      {currentUser.edu && <div className="num-edu">EDU verified · Pro unlocked</div>}
+                    </div>
+                    <div className="num-divider" />
+                    <button className="num-item" onClick={() => { setUserMenuOpen(false); setShowHistory(true) }} type="button">
+                      History ({history.length})
+                    </button>
+                    <button className="num-item num-item--danger" onClick={signOut} type="button">
+                      Sign out
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           <a href="#try" className="nav-cta">Try it free →</a>
         </div>
       </nav>

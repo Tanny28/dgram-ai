@@ -16,11 +16,14 @@ import time
 # ensure backend dir is on path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from dotenv import load_dotenv
+from sqlalchemy.orm import Session
+from starlette.middleware.sessions import SessionMiddleware
 
 load_dotenv()
 
@@ -28,6 +31,8 @@ from core.brain import route_prompt, build_spec
 from core.schemas import DiagramKind, CircuitSpec, GraphSpec, PhysicsSpec
 from core import solver as solver_mod
 from core import practice_problems as practice_mod
+from core.db import init_db, get_db, User, HistoryItem
+from core.auth import oauth, google_configured, is_edu_email, current_user_optional, current_user_required
 from renderers.circuit import render_circuit
 from renderers.graphviz_render import render_graphviz
 from renderers.physics import render_physics
@@ -35,12 +40,28 @@ from renderers.mermaid_render import render_mermaid
 
 app = FastAPI(title="DiagramAI", version="0.1.0")
 
+# Session middleware MUST be added before any route that calls request.session.
+# Signed cookies — secret comes from env in prod. https_only=False keeps local
+# dev working over http; Render fronts everything with TLS so the cookie still
+# only travels over https in production.
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=os.environ.get("SESSION_SECRET", "dev-secret-change-me-in-prod"),
+    same_site="lax",
+    https_only=False,
+    max_age=60 * 60 * 24 * 30,   # 30 days
+)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
+    allow_credentials=True,
 )
+
+# Create tables on startup. SQLite default; override with DATABASE_URL.
+init_db()
 
 
 class GenerateRequest(BaseModel):
@@ -88,6 +109,211 @@ def practice(difficulty: str = None, topic: str = None):
 @app.get("/api/practice/topics")
 def practice_topics():
     return {"topics": practice_mod.all_topics()}
+
+
+# ═══════════════════════════════════════════════════════════════
+#  AUTHENTICATION (Google OAuth + signed-cookie session)
+# ═══════════════════════════════════════════════════════════════
+
+@app.get("/api/auth/config")
+def auth_config():
+    """Tell the frontend whether Google OAuth is wired up.
+    Lets the UI hide the login button when running locally without creds."""
+    return {"google": google_configured()}
+
+
+@app.get("/api/auth/google", name="google_login")
+async def google_login(request: Request):
+    """Kicks off the OAuth dance — redirects to Google's consent screen."""
+    if not google_configured():
+        return RedirectResponse(url="/?auth_error=not_configured")
+    redirect_uri = str(request.url_for("google_callback"))
+    return await oauth.google.authorize_redirect(request, redirect_uri)
+
+
+@app.get("/api/auth/google/callback", name="google_callback")
+async def google_callback(request: Request, db: Session = Depends(get_db)):
+    """Google redirects here with ?code=... We exchange for an id_token,
+    upsert the user, set session['user_id'], and redirect to /."""
+    try:
+        token = await oauth.google.authorize_access_token(request)
+    except Exception as e:
+        print(f"[auth] google callback exchange failed: {e}")
+        return RedirectResponse(url="/?auth_error=exchange_failed")
+
+    userinfo = token.get("userinfo") or {}
+    sub = userinfo.get("sub")
+    email = userinfo.get("email")
+    name = userinfo.get("name")
+    picture = userinfo.get("picture")
+
+    if not sub or not email:
+        return RedirectResponse(url="/?auth_error=missing_userinfo")
+
+    user = db.query(User).filter(User.google_sub == sub).first()
+    if user is None:
+        user = User(google_sub=sub, email=email, name=name, picture=picture)
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    else:
+        # Refresh display fields in case the user updated their Google profile
+        dirty = False
+        if user.name != name:    user.name = name;       dirty = True
+        if user.picture != picture: user.picture = picture; dirty = True
+        if dirty: db.commit()
+
+    request.session["user_id"] = user.id
+    return RedirectResponse(url="/?auth=ok")
+
+
+@app.post("/api/auth/logout")
+async def logout(request: Request):
+    request.session.clear()
+    return {"ok": True}
+
+
+@app.get("/api/me")
+def me(user: User | None = Depends(current_user_optional)):
+    """Returns the current user, or {user: null} when not signed in.
+    Frontend calls this on every page load to determine auth state."""
+    if user is None:
+        return {"user": None}
+    return {
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "name": user.name,
+            "picture": user.picture,
+            "edu": is_edu_email(user.email),
+        }
+    }
+
+
+# ═══════════════════════════════════════════════════════════════
+#  CLOUD HISTORY (per-user, max 50 items)
+# ═══════════════════════════════════════════════════════════════
+
+class HistoryAddRequest(BaseModel):
+    prompt: str
+    kind: str | None = None
+    title: str | None = None
+
+
+@app.get("/api/history")
+def get_history(
+    user: User = Depends(current_user_required),
+    db: Session = Depends(get_db),
+):
+    items = (
+        db.query(HistoryItem)
+        .filter(HistoryItem.user_id == user.id)
+        .order_by(HistoryItem.created_at.desc())
+        .limit(50)
+        .all()
+    )
+    return {
+        "items": [
+            {
+                "id": i.id,
+                "prompt": i.prompt,
+                "kind": i.kind,
+                "title": i.title,
+                "ts": int(i.created_at.timestamp() * 1000),
+            }
+            for i in items
+        ]
+    }
+
+
+@app.post("/api/history")
+def add_history(
+    item: HistoryAddRequest,
+    user: User = Depends(current_user_required),
+    db: Session = Depends(get_db),
+):
+    # de-dup: if the user already has this exact prompt, remove the old entry first
+    db.query(HistoryItem).filter(
+        HistoryItem.user_id == user.id,
+        HistoryItem.prompt == item.prompt,
+    ).delete(synchronize_session=False)
+
+    new_item = HistoryItem(
+        user_id=user.id,
+        prompt=item.prompt,
+        kind=item.kind,
+        title=item.title,
+    )
+    db.add(new_item)
+    db.commit()
+
+    # Enforce 50-item cap per user — drop oldest excess
+    excess = (
+        db.query(HistoryItem)
+        .filter(HistoryItem.user_id == user.id)
+        .order_by(HistoryItem.created_at.desc())
+        .offset(50)
+        .all()
+    )
+    for e in excess:
+        db.delete(e)
+    if excess:
+        db.commit()
+
+    return {"ok": True}
+
+
+@app.delete("/api/history")
+def clear_history(
+    user: User = Depends(current_user_required),
+    db: Session = Depends(get_db),
+):
+    db.query(HistoryItem).filter(HistoryItem.user_id == user.id).delete()
+    db.commit()
+    return {"ok": True}
+
+
+class HistoryBulkRequest(BaseModel):
+    items: list[HistoryAddRequest]
+
+
+@app.post("/api/history/bulk")
+def add_history_bulk(
+    req: HistoryBulkRequest,
+    user: User = Depends(current_user_required),
+    db: Session = Depends(get_db),
+):
+    """One-shot migration endpoint: frontend posts its entire localStorage
+    history the first time the user signs in, so they don't lose past work."""
+    seen_prompts = set()
+    for item in req.items:
+        if item.prompt in seen_prompts:
+            continue
+        seen_prompts.add(item.prompt)
+
+        db.query(HistoryItem).filter(
+            HistoryItem.user_id == user.id,
+            HistoryItem.prompt == item.prompt,
+        ).delete(synchronize_session=False)
+
+        db.add(HistoryItem(
+            user_id=user.id, prompt=item.prompt, kind=item.kind, title=item.title,
+        ))
+    db.commit()
+
+    # Cap at 50
+    excess = (
+        db.query(HistoryItem)
+        .filter(HistoryItem.user_id == user.id)
+        .order_by(HistoryItem.created_at.desc())
+        .offset(50)
+        .all()
+    )
+    for e in excess:
+        db.delete(e)
+    if excess:
+        db.commit()
+    return {"ok": True, "imported": len(seen_prompts)}
 
 
 def _render_and_solve(kind: DiagramKind, spec) -> dict:

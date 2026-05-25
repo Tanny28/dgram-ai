@@ -3,7 +3,24 @@ services:
     name: dgram-ai
     runtime: docker
     plan: free
+    healthCheckPath: /api/health
+
+    # Persistent disk for SQLite. The 1 GB free tier is plenty for
+    # users + history rows (history is just text strings).
+    disk:
+      name: dgram-ai-data
+      mountPath: /data
+      sizeGB: 1
+
     envVars:
       - key: GROQ_API_KEY
-        sync: false
-    healthCheckPath: /api/health
+        sync: false              # set manually in Render dashboard
+
+      - key: SESSION_SECRET
+        generateValue: true      # Render auto-generates a strong secret
+
+      - key: GOOGLE_CLIENT_ID
+        sync: false              # paste from Google Cloud Console
+
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false              # paste from Google Cloud Console
