@@ -2,12 +2,80 @@ import { useState, useEffect, useRef } from 'react'
 
 const EXAMPLES = [
   'RC low-pass filter with 1kOhm and 100nF',
-  'voltage divider, 12V across 1kOhm and 2kOhm',
+  'voltage divider 12V across 1kOhm and 2kOhm',
   'series RLC circuit, 10mH 100nF 50Ohm',
   'flowchart for binary search algorithm',
   'free body diagram of a block on an incline',
   'system architecture: client, API gateway, auth, orders, database',
 ]
+
+const FEATURES = [
+  {
+    icon: '⬡',
+    title: 'Deterministic Rendering',
+    desc: 'Every diagram is rendered from a verified Pydantic spec, not hallucinated pixels. If the spec is correct, the diagram is correct — guaranteed.',
+    tag: 'core',
+  },
+  {
+    icon: '∫',
+    title: 'Circuit Math Solver',
+    desc: 'Cutoff frequencies, impedances, voltage drops — all solved analytically with step-by-step working shown alongside the schematic.',
+    tag: 'circuits',
+  },
+  {
+    icon: '⇄',
+    title: 'Smart LLM Routing',
+    desc: 'Groq strict JSON mode classifies your prompt into the right diagram type before building the spec. No ambiguity, no wrong renderers.',
+    tag: 'ai',
+  },
+  {
+    icon: '◈',
+    title: '6 Diagram Types',
+    desc: 'Circuits (SchemDraw), flowcharts + sequences + states (Mermaid), block diagrams (Graphviz), and physics free-body diagrams (Matplotlib).',
+    tag: 'renderers',
+  },
+  {
+    icon: '⌇',
+    title: 'Offline Fallback',
+    desc: 'No Groq key? No problem. A curated offline spec library covers the most common engineering diagram patterns out of the box.',
+    tag: 'resilience',
+  },
+  {
+    icon: '{}',
+    title: 'Structured Spec Output',
+    desc: 'Every response includes the full Pydantic spec as JSON — machine-readable, testable, and auditable. The spec is the source of truth.',
+    tag: 'api',
+  },
+]
+
+const DIAGRAM_TYPES = [
+  { name: 'Electrical Circuits', hint: 'RC filters · voltage dividers · RLC circuits', color: '#fafb63', icon: '〜' },
+  { name: 'Flowcharts', hint: 'Algorithms · decision trees · processes', color: '#6bfff7', icon: '⬡' },
+  { name: 'Block Diagrams', hint: 'System architecture · data flow · components', color: '#fafb63', icon: '⊞' },
+  { name: 'Physics', hint: 'Free-body · force vectors · incline problems', color: '#6bfff7', icon: '→' },
+  { name: 'Sequence Diagrams', hint: 'API calls · message flows · protocols', color: '#fafb63', icon: '⇄' },
+  { name: 'State Machines', hint: 'FSMs · transitions · lifecycle diagrams', color: '#6bfff7', icon: '◎' },
+]
+
+const STEPS = [
+  {
+    num: '01',
+    title: 'Describe',
+    body: 'Type your diagram in plain English. "RC low-pass filter with 1kΩ and 100nF" is enough to get a correct schematic and solved math.',
+  },
+  {
+    num: '02',
+    title: 'Route + Spec',
+    body: 'Groq classifies the prompt and builds a validated Pydantic schema — the spec is the contract. No ambiguous pixels, just verified structure.',
+  },
+  {
+    num: '03',
+    title: 'Render + Solve',
+    body: 'Deterministic libraries render the exact diagram from the spec. For circuits, the engineering math is solved analytically with full working.',
+  },
+]
+
+// ── sub-components ──
 
 function SpecView({ spec }) {
   const json = JSON.stringify(spec, null, 2)
@@ -27,12 +95,11 @@ function MermaidView({ code }) {
     let cancelled = false
 
     async function render() {
-      // load mermaid from CDN if not already loaded
       if (!window.mermaid) {
         const s = document.createElement('script')
         s.src = 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js'
         s.onload = () => {
-          window.mermaid.initialize({ startOnLoad: false, theme: 'neutral', fontFamily: 'Archivo, sans-serif' })
+          window.mermaid.initialize({ startOnLoad: false, theme: 'dark', fontFamily: 'JetBrains Mono, monospace' })
           if (!cancelled) doRender()
         }
         document.head.appendChild(s)
@@ -59,13 +126,15 @@ function MermaidView({ code }) {
   }, [code])
 
   return (
-    <div className="canvas" style={{ background: '#fff', minHeight: 200 }}>
+    <div className="canvas mermaid-canvas">
       <div ref={ref} style={{ width: '100%', textAlign: 'center' }}>
-        {!loaded && <span style={{ color: '#888', fontFamily: 'var(--mono)', fontSize: 12 }}>rendering diagram...</span>}
+        {!loaded && <span className="canvas-hint">rendering diagram…</span>}
       </div>
     </div>
   )
 }
+
+// ── main app ──
 
 export default function App() {
   const [prompt, setPrompt] = useState('')
@@ -73,9 +142,13 @@ export default function App() {
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
   const [health, setHealth] = useState(null)
+  const [navScrolled, setNavScrolled] = useState(false)
 
   useEffect(() => {
     fetch('/api/health').then(r => r.json()).then(setHealth).catch(() => setHealth({ status: 'down' }))
+    const onScroll = () => setNavScrolled(window.scrollY > 40)
+    window.addEventListener('scroll', onScroll)
+    return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
   async function run(p) {
@@ -92,10 +165,16 @@ export default function App() {
       if (!res.ok) throw new Error(`server returned ${res.status}`)
       setResult(await res.json())
     } catch (e) {
-      setError(`generation failed -- ${e.message}. is the backend running on :8000?`)
+      setError(`generation failed — ${e.message}`)
     } finally {
       setLoading(false)
     }
+  }
+
+  function tryExample(ex) {
+    setPrompt(ex)
+    document.getElementById('try')?.scrollIntoView({ behavior: 'smooth' })
+    setTimeout(() => run(ex), 500)
   }
 
   const offline = health && !health.groq_key_present
@@ -105,124 +184,284 @@ export default function App() {
   const hasSolution = sol?.summary && sol?.solvable
 
   return (
-    <div className="shell">
-      <div className="topbar">
-        <div className="brand">
-          <span className="mark">diagram<b>AI</b></span>
-          <span className="ver">v0.1.0</span>
+    <div className="site">
+
+      {/* ── NAV ── */}
+      <nav className={`nav ${navScrolled ? 'nav--scrolled' : ''}`}>
+        <div className="nav-inner">
+          <a href="#" className="nav-logo">diagram<span>AI</span></a>
+          <div className="nav-links">
+            <a href="#features">Features</a>
+            <a href="#how">How it works</a>
+            <a href="#types">Diagrams</a>
+          </div>
+          <a href="#try" className="nav-cta">Try it free →</a>
         </div>
-        <div className="status">
-          <span className={`dot ${offline ? 'offline' : ''}`} />
-          {health ? (offline ? 'offline / fallback engine' : 'groq engine online') : 'connecting...'}
+      </nav>
+
+      {/* ── HERO ── */}
+      <section className="hero">
+        <div className="hero-grid-bg" />
+        <div className="hero-glow" />
+        <div className="hero-inner">
+          <div className="hero-badge">
+            <span className="badge-dot" />
+            {health === null ? 'connecting…' : offline ? 'offline fallback mode' : 'Groq engine · online'}
+          </div>
+
+          <h1 className="hero-h1">
+            Turn plain English<br />
+            into <span className="grad-text">engineering diagrams.</span>
+          </h1>
+
+          <p className="hero-sub">
+            DiagramAI doesn&apos;t generate pixels — it generates a <em>verified structured specification</em>,
+            renders it deterministically, and solves the engineering math.
+            No hallucinated wires. No floating components.{' '}
+            <strong>Just the right answer.</strong>
+          </p>
+
+          <div className="hero-actions">
+            <a href="#try" className="btn-primary">Generate a diagram →</a>
+            <a href="#how" className="btn-ghost">See how it works</a>
+          </div>
+
+          <div className="hero-chips">
+            {EXAMPLES.slice(0, 3).map(ex => (
+              <span key={ex} className="hero-chip" onClick={() => tryExample(ex)}>
+                {ex}
+              </span>
+            ))}
+          </div>
         </div>
-      </div>
+      </section>
 
-      <div className="hero">
-        <h1>Engineering diagrams that are <span className="accent">correct by construction.</span></h1>
-        <p>
-          DiagramAI doesn't generate pixels -- it generates a verified structured specification,
-          renders it deterministically, then <span style={{ color: 'var(--text)' }}>solves the underlying
-          engineering math</span>. No hallucinated wires. No floating components. Just the right answer.
-        </p>
-      </div>
+      {/* ── GENERATOR ── */}
+      <section className="generator-section" id="try">
+        <div className="section-inner">
+          <div className="section-label">// live generator</div>
+          <h2 className="section-h2">Try it now.</h2>
 
-      <div className="console">
-        <div className="console-head">prompt -- describe a diagram in plain english</div>
-        <div className="console-body">
-          <span className="prompt-sigil">&rsaquo;</span>
-          <input
-            value={prompt}
-            placeholder="e.g. RC low-pass filter with 1kOhm and 100nF"
-            onChange={e => setPrompt(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && run()}
-            autoFocus
-          />
-          <button onClick={() => run()} disabled={loading}>
-            {loading ? 'SOLVING...' : 'GENERATE'}
-          </button>
-        </div>
-      </div>
-
-      <div className="chips">
-        {EXAMPLES.map(ex => (
-          <div className="chip" key={ex} onClick={() => { setPrompt(ex); run(ex) }}>{ex}</div>
-        ))}
-      </div>
-
-      {loading && <div className="loadbar" />}
-      {error && <div className="error-line">{error}</div>}
-
-      {result && (
-        <div className="results">
-          <div className="panel">
-            <div className="panel-head">
-              <span className="label">schematic</span>
-              <span className="tag">{result.kind}</span>
+          <div className="terminal">
+            <div className="terminal-bar">
+              <span className="t-dot t-red" />
+              <span className="t-dot t-yellow" />
+              <span className="t-dot t-green" />
+              <span className="t-title">dgram-ai · prompt engine</span>
+              <span className="t-status">
+                <span className={`t-indicator ${offline ? 'offline' : ''}`} />
+                {health === null ? '…' : offline ? 'fallback' : 'groq online'}
+              </span>
             </div>
-            <div className="panel-body">
-              {hasImage ? (
-                <div className="canvas">
-                  <img src={`data:image/png;base64,${result.image_b64}`} alt={result.title} />
-                </div>
-              ) : hasMermaid ? (
-                <MermaidView code={result.mermaid_code} />
-              ) : (
-                <div className="canvas empty">
-                  <span>no renderer matched -- try a different prompt</span>
-                </div>
-              )}
-              <div className="metaline">
-                <span><b>title</b> {result.title || '--'}</span>
-                <span><b>route</b> {result.meta.routing_reason}</span>
-                <span><b>{result.meta.elapsed_ms}ms</b></span>
-              </div>
+            <div className="terminal-body">
+              <span className="t-sigil">›</span>
+              <input
+                value={prompt}
+                placeholder="e.g. RC low-pass filter with 1kΩ and 100nF"
+                onChange={e => setPrompt(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && run()}
+                autoFocus
+              />
+              <button onClick={() => run()} disabled={loading}>
+                {loading ? '⟳ SOLVING' : 'GENERATE ↗'}
+              </button>
             </div>
           </div>
 
-          <div className="panel">
-            <div className="panel-head">
-              <span className="label">solution</span>
-              {hasSolution && <span className="tag">solved</span>}
+          <div className="example-chips">
+            {EXAMPLES.map(ex => (
+              <div className="ex-chip" key={ex} onClick={() => { setPrompt(ex); run(ex) }}>
+                {ex}
+              </div>
+            ))}
+          </div>
+
+          {loading && (
+            <div className="loadbar">
+              <div className="loadbar-fill" />
             </div>
-            <div className="panel-body">
-              {hasSolution ? (
-                <>
-                  <div className="readout-summary">{sol.summary}</div>
-                  {sol.quantities && Object.keys(sol.quantities).length > 0 && (
-                    <div className="quantities">
-                      {Object.entries(sol.quantities).map(([k, v]) => (
-                        <div className="quantity" key={k}>
-                          <div className="k">{k}</div>
-                          <div className="v">{v}</div>
-                        </div>
-                      ))}
+          )}
+          {error && <div className="error-banner">{error}</div>}
+
+          {result && (
+            <div className="results-grid">
+              {/* schematic panel */}
+              <div className="result-panel">
+                <div className="rp-head">
+                  <span className="rp-label">schematic</span>
+                  <span className="rp-tag">{result.kind}</span>
+                </div>
+                <div className="rp-body">
+                  {hasImage ? (
+                    <div className="canvas">
+                      <img src={`data:image/png;base64,${result.image_b64}`} alt={result.title} />
+                    </div>
+                  ) : hasMermaid ? (
+                    <MermaidView code={result.mermaid_code} />
+                  ) : (
+                    <div className="canvas canvas-empty">
+                      no renderer matched — try a different prompt
                     </div>
                   )}
-                  {sol.steps?.length > 0 && (
-                    <ol className="steps">
-                      {sol.steps.map((s, i) => <li key={i}>{s}</li>)}
-                    </ol>
-                  )}
-                </>
-              ) : (
-                <div className="canvas empty" style={{ minHeight: 120 }}>
-                  <span>{result.kind === 'circuit' ? 'add component values to solve' : `${result.kind} diagrams -- visual output only`}</span>
+                  <div className="rp-meta">
+                    <span><b>title</b> {result.title || '—'}</span>
+                    <span><b>route</b> {result.meta.routing_reason}</span>
+                    <span className="rp-time">{result.meta.elapsed_ms}ms</span>
+                  </div>
                 </div>
-              )}
-            </div>
-          </div>
+              </div>
 
-          <div className="panel" style={{ gridColumn: '1 / -1' }}>
-            <div className="panel-head">
-              <span className="label">structured spec -- the source of truth</span>
-              <span className="tag">json</span>
+              {/* solution panel */}
+              <div className="result-panel">
+                <div className="rp-head">
+                  <span className="rp-label">solution</span>
+                  {hasSolution && <span className="rp-tag rp-tag--solved">solved ✓</span>}
+                </div>
+                <div className="rp-body">
+                  {hasSolution ? (
+                    <>
+                      <div className="sol-summary">{sol.summary}</div>
+                      {sol.quantities && Object.keys(sol.quantities).length > 0 && (
+                        <div className="quantities">
+                          {Object.entries(sol.quantities).map(([k, v]) => (
+                            <div className="quantity" key={k}>
+                              <div className="q-key">{k}</div>
+                              <div className="q-val">{v}</div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {sol.steps?.length > 0 && (
+                        <ol className="steps">
+                          {sol.steps.map((s, i) => <li key={i}>{s}</li>)}
+                        </ol>
+                      )}
+                    </>
+                  ) : (
+                    <div className="canvas canvas-empty" style={{ minHeight: 120 }}>
+                      {result.kind === 'circuit'
+                        ? 'add component values to solve'
+                        : `${result.kind} — visual output only`}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* spec panel */}
+              <div className="result-panel result-panel--full">
+                <div className="rp-head">
+                  <span className="rp-label">structured spec // source of truth</span>
+                  <span className="rp-tag">json</span>
+                </div>
+                <div className="rp-body">
+                  <SpecView spec={result.spec} />
+                </div>
+              </div>
             </div>
-            <div className="panel-body">
-              <SpecView spec={result.spec} />
-            </div>
+          )}
+        </div>
+      </section>
+
+      {/* ── FEATURES ── */}
+      <section className="features-section" id="features">
+        <div className="section-inner">
+          <div className="section-label">// capabilities</div>
+          <h2 className="section-h2">Built different.</h2>
+          <p className="section-sub">
+            Most AI diagram tools generate images.
+            DiagramAI generates <em>correct specifications</em>.
+          </p>
+          <div className="features-grid">
+            {FEATURES.map(f => (
+              <div className="feature-card" key={f.title}>
+                <div className="fc-icon">{f.icon}</div>
+                <div className="fc-tag">{f.tag}</div>
+                <h3 className="fc-title">{f.title}</h3>
+                <p className="fc-desc">{f.desc}</p>
+              </div>
+            ))}
           </div>
         </div>
-      )}
+      </section>
+
+      {/* ── HOW IT WORKS ── */}
+      <section className="how-section" id="how">
+        <div className="section-inner">
+          <div className="section-label">// process</div>
+          <h2 className="section-h2">How it works.</h2>
+          <div className="steps-row">
+            {STEPS.map((s, i) => (
+              <div className="step-card" key={s.num}>
+                <div className="step-num">{s.num}</div>
+                <h3 className="step-title">{s.title}</h3>
+                <p className="step-body">{s.body}</p>
+                {i < STEPS.length - 1 && <div className="step-arrow">→</div>}
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── DIAGRAM TYPES ── */}
+      <section className="types-section" id="types">
+        <div className="section-inner">
+          <div className="section-label">// supported diagrams</div>
+          <h2 className="section-h2">Six types. One API.</h2>
+          <div className="types-grid">
+            {DIAGRAM_TYPES.map(t => (
+              <div
+                className="type-card"
+                key={t.name}
+                style={{ '--tc-accent': t.color }}
+                onClick={() => tryExample(
+                  t.name === 'Electrical Circuits' ? EXAMPLES[0]
+                  : t.name === 'Flowcharts' ? EXAMPLES[3]
+                  : t.name === 'Physics' ? EXAMPLES[4]
+                  : t.name === 'Block Diagrams' ? EXAMPLES[5]
+                  : EXAMPLES[0]
+                )}
+              >
+                <div className="tc-icon" style={{ color: t.color }}>{t.icon}</div>
+                <h3 className="tc-name">{t.name}</h3>
+                <p className="tc-hint">{t.hint}</p>
+                <div className="tc-try">try it →</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── INSIGHT BANNER ── */}
+      <section className="insight-section">
+        <div className="section-inner">
+          <div className="insight-card">
+            <div className="insight-quote">
+              &ldquo;We don&apos;t generate images.<br />
+              We generate <span className="grad-text">verified specifications</span><br />
+              and render them deterministically.&rdquo;
+            </div>
+            <div className="insight-sub">
+              The diagram is correct because the spec is correct-by-construction.
+            </div>
+            <a href="#try" className="btn-primary">Generate your first diagram →</a>
+          </div>
+        </div>
+      </section>
+
+      {/* ── FOOTER ── */}
+      <footer className="footer">
+        <div className="footer-inner">
+          <div className="footer-logo">diagram<span>AI</span></div>
+          <div className="footer-links">
+            <a href="#try">Generator</a>
+            <a href="#features">Features</a>
+            <a href="#how">How it works</a>
+            <a href="https://github.com/Tanny28/dgram-ai" target="_blank" rel="noreferrer">GitHub ↗</a>
+          </div>
+          <div className="footer-copy">v0.1.0 · FastAPI + Groq + SchemDraw + Graphviz</div>
+        </div>
+      </footer>
+
     </div>
   )
 }
