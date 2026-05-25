@@ -1,25 +1,20 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 80" fill="none">
-  <!-- D icon: outer C arc + inner vertical bar -->
-  <g>
-    <!-- Outer rounded C shape -->
-    <path d="M52 12 C28 12 12 26 12 40 C12 54 28 68 52 68"
-          stroke="#aaff45" stroke-width="9" stroke-linecap="round" fill="none"/>
-    <!-- Inner C shape (smaller) -->
-    <path d="M44 24 C32 24 24 31 24 40 C24 49 32 56 44 56"
-          stroke="#aaff45" stroke-width="7" stroke-linecap="round" fill="none"/>
-    <!-- Vertical bar (right side of D) -->
-    <line x1="52" y1="12" x2="52" y2="68" stroke="#aaff45" stroke-width="9" stroke-linecap="round"/>
-  </g>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 268 60" fill="none">
 
-  <!-- "iagram" in white -->
-  <text x="68" y="53" font-family="'Syne', 'Barlow', sans-serif" font-weight="700"
-        font-size="36" fill="#ffffff" letter-spacing="-0.5">iagram</text>
+  <!-- D icon: outer C -->
+  <path d="M46 6 C46 6 10 6 10 30 C10 54 46 54 46 54"
+        stroke="#aaff45" stroke-width="8.5" stroke-linecap="round" fill="none"/>
 
-  <!-- ".ai" in green -->
-  <text x="214" y="53" font-family="'Syne', 'Barlow', sans-serif" font-weight="700"
-        font-size="36" fill="#aaff45" letter-spacing="-0.5">.ai</text>
+  <!-- D icon: inner C -->
+  <path d="M46 18 C46 18 24 18 24 30 C24 42 46 42 46 42"
+        stroke="#aaff45" stroke-width="6.5" stroke-linecap="round" fill="none"/>
 
-  <!-- TM superscript -->
-  <text x="296" y="24" font-family="'Barlow', sans-serif" font-weight="400"
-        font-size="11" fill="#ffffff" opacity="0.7">TM</text>
+  <!-- D icon: right vertical bar -->
+  <line x1="46" y1="6" x2="46" y2="54"
+        stroke="#aaff45" stroke-width="8.5" stroke-linecap="round"/>
+
+  <!-- Logo text: "iagram.ai™" — single text element so spacing is automatic -->
+  <text y="44" font-family="'Arial Black', 'Arial', Helvetica, sans-serif" font-size="30" font-weight="900" letter-spacing="-0.5">
+    <tspan x="60" fill="#ffffff">iagram</tspan><tspan fill="#aaff45">.ai</tspan><tspan font-size="11" font-weight="400" fill="rgba(255,255,255,0.65)" dy="-14">™</tspan>
+  </text>
+
 </svg>
