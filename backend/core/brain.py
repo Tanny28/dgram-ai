@@ -28,7 +28,7 @@ from core import offline_fallback
 
 T = TypeVar("T", bound=BaseModel)
 
-DEFAULT_MODEL = os.environ.get("DIAGRAMAI_MODEL", "llama-3.3-70b-versatile")
+DEFAULT_MODEL = os.environ.get("DIAGRAMAI_MODEL", "openai/gpt-oss-120b")
 
 _SPEC_FOR_KIND = {
     DiagramKind.CIRCUIT:   CircuitSpec,
