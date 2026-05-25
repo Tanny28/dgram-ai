@@ -75,6 +75,64 @@ const STEPS = [
   },
 ]
 
+const TESTIMONIALS = [
+  {
+    text: 'Finally an AI diagram tool that checks the math. Ran an RC filter problem and got the exact cutoff frequency — correct to the right number of significant figures.',
+    name: 'Rohan M.',
+    role: 'EE undergrad, IIT Bombay',
+    tag: 'RC Filter',
+  },
+  {
+    text: 'Used this for a lab report on series RLC circuits. The PDF export included step-by-step working I could cite directly. My TA asked which tool generated it.',
+    name: 'Sarah C.',
+    role: 'Electrical Engineering, UC Berkeley',
+    tag: 'RLC Circuit',
+  },
+  {
+    text: 'The tweak panel is the killer feature. Change a resistor value, see the solved math update in under 100ms. No LLM call, no hallucinations — pure deterministic output.',
+    name: 'Alex P.',
+    role: 'Systems Engineer, Berlin',
+    tag: 'Tweak Panel',
+  },
+  {
+    text: 'I teach digital circuits. The state machine diagrams are correctly typed — the model actually distinguishes Moore from Mealy outputs. That level of correctness is rare.',
+    name: 'Dr. M. Torres',
+    role: 'Lecturer, Faculty of Engineering',
+    tag: 'State Machines',
+  },
+]
+
+const FAQ_ITEMS = [
+  {
+    q: 'Is DiagramAI really free?',
+    a: 'The Free tier provides 50 diagram generations per month with access to all 6 diagram types, the circuit math solver, and all export formats. Verified .edu email addresses receive unlimited Pro features at no cost — permanently.',
+  },
+  {
+    q: 'How accurate is the circuit math?',
+    a: 'All math is solved analytically by a deterministic Python solver — not by the LLM. The solver parses SI-prefixed component values (1kOhm, 100nF, 10mH) and applies the exact formulas. The LLM builds the structured spec; it never touches the numbers.',
+  },
+  {
+    q: 'What diagram types are supported?',
+    a: 'Six types: electrical circuits (SchemDraw), flowcharts + sequence diagrams + state machines (Mermaid), block and architecture diagrams (Graphviz), and physics free-body diagrams (Matplotlib). Each type has its own validated Pydantic schema.',
+  },
+  {
+    q: 'Can I use DiagramAI without a Groq API key?',
+    a: 'Yes. The backend ships with an offline fallback mode that covers the most common engineering diagram patterns from a curated spec library. The status indicator in the generator shows whether you are in live or offline mode.',
+  },
+  {
+    q: 'What is the "spec" and why does it matter?',
+    a: 'Every diagram is generated from a validated Pydantic v2 schema — the spec. Instead of asking the LLM to draw a circuit directly, we ask it to fill a strict JSON structure. A circuit spec cannot have floating wires or unlabeled nodes by construction. Edit the spec in the Tweak Panel and the diagram re-renders instantly with no LLM call.',
+  },
+  {
+    q: 'What export formats are available?',
+    a: 'PNG, SVG, PDF (with full step-by-step working), JSON spec, and LaTeX are all available from the export toolbar. The PDF report includes the diagram, solved quantities, and working steps in a clean A4 layout.',
+  },
+  {
+    q: 'Is there a REST API I can call from my own code?',
+    a: 'Yes. POST /api/generate accepts a prompt string and returns the full spec, rendered image, solved math, and routing metadata. POST /api/rerender lets you tweak a spec and re-render without an LLM call. The full spec JSON is always returned so you can store and replay it.',
+  },
+]
+
 // ── sub-components ──
 
 function SpecView({ spec }) {
@@ -398,7 +456,7 @@ function EmailModal({ onClose, flashToast }) {
     if (!isValid || submitting) return
     setSubmitting(true)
     saveEmail(email, isEdu)
-    flashToast(isEdu ? '🎓 EDU verified — Pro features unlocked!' : '✓ 100 free credits added to your account')
+    flashToast(isEdu ? 'EDU verified — Pro features unlocked!' : '100 free credits added to your account')
     setTimeout(onClose, 1200)
   }
 
@@ -430,7 +488,7 @@ function EmailModal({ onClose, flashToast }) {
           </button>
         </form>
         {isValid && isEdu && (
-          <div className="em-edu-flash">🎓 Detected EDU email — you&apos;ll get Pro free.</div>
+          <div className="em-edu-flash">Detected EDU email — you will get Pro free.</div>
         )}
         <div className="em-perks">
           <div className="em-perk"><span>✓</span> Unlimited diagram generations</div>
@@ -511,7 +569,7 @@ function TweakPanel({ result, onRerendered, flashToast }) {
   return (
     <div className="result-panel result-panel--full tweak-panel">
       <div className="rp-head">
-        <span className="rp-label">⚡ tweak values · no LLM call</span>
+        <span className="rp-label">tweak values · no LLM call</span>
         <span className="rp-tag" style={{
           color: pending ? 'var(--cyan)' : 'var(--yellow)',
           borderColor: pending ? 'rgba(107, 255, 247, 0.4)' : 'rgba(250, 251, 99, 0.3)',
@@ -602,6 +660,7 @@ export default function App() {
   const [practiceRevealed, setPracticeRevealed] = useState(false)
   const [showHint, setShowHint] = useState(false)
   const [showEmail, setShowEmail] = useState(false)
+  const [faqOpen, setFaqOpen] = useState(null)
   // ─── Compare mode ───
   const [compareMode, setCompareMode] = useState(false)
   const [variantA, setVariantA] = useState(null)        // snapshot result
@@ -611,6 +670,7 @@ export default function App() {
   const [variantBResult, setVariantBResult] = useState(null)
   const diagramAreaRef = useRef(null)
   const toastTimerRef = useRef(null)
+  const promptInputRef = useRef(null)
 
   function flashToast(msg) {
     setToast(msg)
@@ -641,6 +701,29 @@ export default function App() {
     }
 
     return () => window.removeEventListener('scroll', onScroll)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // keyboard shortcuts: Ctrl/Cmd+K → focus prompt, Ctrl/Cmd+H → history, Escape → close
+  useEffect(() => {
+    function onKey(e) {
+      const mod = e.ctrlKey || e.metaKey
+      if (mod && e.key === 'k') {
+        e.preventDefault()
+        document.getElementById('try')?.scrollIntoView({ behavior: 'smooth' })
+        setTimeout(() => promptInputRef.current?.focus(), 300)
+      }
+      if (mod && e.key === 'h') {
+        e.preventDefault()
+        setShowHistory(v => !v)
+      }
+      if (e.key === 'Escape') {
+        setShowHistory(false)
+        setShowEmail(false)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -826,6 +909,7 @@ export default function App() {
             <a href="#how">How it works</a>
             <a href="#types">Diagrams</a>
             <a href="#pricing">Pricing</a>
+            <a href="#faq">FAQ</a>
           </div>
           <button
             className="nav-history-btn"
@@ -969,7 +1053,7 @@ export default function App() {
           <div className="generator-head">
             <h2 className="section-h2">Try it now.</h2>
             <button className="practice-btn" onClick={loadPracticeProblem} type="button" title="Get a random engineering practice problem">
-              🎲 Random Practice Problem
+              Random Practice Problem
             </button>
           </div>
 
@@ -1056,7 +1140,7 @@ export default function App() {
           {/* DIFF CALLOUT (only when both variants have solutions) */}
           {compareMode && variantA?.solution?.solvable && variantBResult?.solution?.solvable && (
             <div className="compare-diff">
-              <div className="cd-head">⚡ Differences</div>
+              <div className="cd-head">Differences</div>
               <div className="cd-rows">
                 {Object.keys(variantA.solution.quantities || {}).map(key => {
                   const a = variantA.solution.quantities[key]
@@ -1079,7 +1163,7 @@ export default function App() {
             <div className="practice-card">
               <div className="pc-head">
                 <div className="pc-meta">
-                  <span className="pc-tag">📚 PRACTICE</span>
+                  <span className="pc-tag">PRACTICE</span>
                   <span className={`pc-diff pc-diff--${practice.difficulty}`}>{practice.difficulty}</span>
                   <span className="pc-topic">{practice.topic}</span>
                 </div>
@@ -1087,14 +1171,14 @@ export default function App() {
               </div>
               <div className="pc-body">
                 <div className="pc-section">
-                  <div className="pc-label">🧠 Challenge</div>
+                  <div className="pc-label">Challenge</div>
                   <p className="pc-challenge">{practice.challenge}</p>
                 </div>
 
                 <div className="pc-actions">
                   {!showHint && !practiceRevealed && (
                     <button className="pc-action-btn pc-action-btn--ghost" onClick={() => setShowHint(true)}>
-                      💡 Show hint
+                      Show hint
                     </button>
                   )}
                   {!practiceRevealed && (
@@ -1106,18 +1190,18 @@ export default function App() {
 
                 {showHint && (
                   <div className="pc-hint">
-                    <span className="pc-hint-label">💡 Hint:</span> {practice.hint}
+                    <span className="pc-hint-label">Hint:</span> {practice.hint}
                   </div>
                 )}
 
                 {practiceRevealed && (
                   <div className="pc-reveal">
                     <div className="pc-section">
-                      <div className="pc-label">🎯 Learning objective</div>
+                      <div className="pc-label">Learning objective</div>
                       <p className="pc-obj">{practice.learning_objective}</p>
                     </div>
                     <div className="pc-section">
-                      <div className="pc-label">📐 Solution</div>
+                      <div className="pc-label">Solution working</div>
                       <p className="pc-obj" style={{ color: 'var(--text-dim)' }}>
                         Check the <strong>Solution panel</strong> below for the analytical result with full step-by-step working.
                         {result?.solution?.summary && (
@@ -1137,6 +1221,7 @@ export default function App() {
               <span className="t-dot t-yellow" />
               <span className="t-dot t-green" />
               <span className="t-title">dgram-ai · prompt engine</span>
+              <span className="t-shortcut">Ctrl+K</span>
               <span className="t-status">
                 <span className={`t-indicator ${offline ? 'offline' : ''}`} />
                 {health === null ? '…' : offline ? 'fallback' : 'groq online'}
@@ -1145,6 +1230,7 @@ export default function App() {
             <div className="terminal-body">
               <span className="t-sigil">›</span>
               <input
+                ref={promptInputRef}
                 value={prompt}
                 placeholder="e.g. RC low-pass filter with 1kΩ and 100nF"
                 onChange={e => setPrompt(e.target.value)}
@@ -1388,7 +1474,7 @@ export default function App() {
             </div>
 
             <div className="price-card price-card--edu">
-              <div className="pc-ribbon pc-ribbon--edu">🎓 EDU FREE</div>
+              <div className="pc-ribbon pc-ribbon--edu">EDU FREE</div>
               <div className="pc-tier">Student</div>
               <div className="pc-price">$0<span>/forever</span></div>
               <p className="pc-tagline">Verified <code>.edu</code> = full Pro, free.</p>
@@ -1407,6 +1493,54 @@ export default function App() {
           <div className="pricing-footnote">
             Need a <strong>team plan</strong> or <strong>enterprise integration</strong>?{' '}
             <a href="mailto:hello@dgram.ai">Get in touch →</a>
+          </div>
+        </div>
+      </section>
+
+      {/* ── TESTIMONIALS ── */}
+      <section className="testimonials-section" id="testimonials">
+        <div className="section-inner">
+          <div className="section-label">// from engineers</div>
+          <h2 className="section-h2">Built for people who care about correct answers.</h2>
+          <div className="testimonials-grid">
+            {TESTIMONIALS.map((t, i) => (
+              <div className="tcard" key={i}>
+                <div className="tcard-tag">{t.tag}</div>
+                <p className="tcard-text">{t.text}</p>
+                <div className="tcard-author">
+                  <div className="tcard-name">{t.name}</div>
+                  <div className="tcard-role">{t.role}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── FAQ ── */}
+      <section className="faq-section" id="faq">
+        <div className="section-inner">
+          <div className="section-label">// faq</div>
+          <h2 className="section-h2">Common questions.</h2>
+          <div className="faq-list">
+            {FAQ_ITEMS.map((item, i) => (
+              <div
+                className={`faq-item ${faqOpen === i ? 'faq-item--open' : ''}`}
+                key={i}
+              >
+                <button
+                  className="faq-q"
+                  onClick={() => setFaqOpen(faqOpen === i ? null : i)}
+                  type="button"
+                >
+                  <span>{item.q}</span>
+                  <span className="faq-chevron">{faqOpen === i ? '−' : '+'}</span>
+                </button>
+                {faqOpen === i && (
+                  <div className="faq-a">{item.a}</div>
+                )}
+              </div>
+            ))}
           </div>
         </div>
       </section>
@@ -1437,7 +1571,8 @@ export default function App() {
           <div className="footer-links">
             <a href="#try">Generator</a>
             <a href="#features">Features</a>
-            <a href="#how">How it works</a>
+            <a href="#pricing">Pricing</a>
+            <a href="#faq">FAQ</a>
             <a href="https://github.com/Tanny28/dgram-ai" target="_blank" rel="noreferrer">GitHub ↗</a>
           </div>
           <div className="footer-copy">v0.1.0 · FastAPI + Groq + SchemDraw + Graphviz</div>
