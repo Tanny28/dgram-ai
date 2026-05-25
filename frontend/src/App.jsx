@@ -167,14 +167,17 @@ function loadMermaid() {
 }
 
 function MermaidView({ code }) {
-  const ref = useRef(null)
-  const [loaded, setLoaded] = useState(false)
+  // svgHtml drives rendering via dangerouslySetInnerHTML so React fully owns
+  // the DOM node — avoids the ref.current.innerHTML crash where React's
+  // reconciler tries to removeChild a span that innerHTML already replaced,
+  // throwing NotFoundError and unmounting the entire app (black screen).
+  const [svgHtml, setSvgHtml] = useState('')
   const [renderError, setRenderError] = useState('')
 
   useEffect(() => {
-    if (!code || !ref.current) return
+    if (!code) return
     let cancelled = false
-    setLoaded(false)
+    setSvgHtml('')
     setRenderError('')
 
     loadMermaid().then(async () => {
@@ -182,10 +185,7 @@ function MermaidView({ code }) {
       try {
         const id = 'mermaid-' + Date.now()
         const { svg } = await window.mermaid.render(id, code)
-        if (!cancelled && ref.current) {
-          ref.current.innerHTML = svg
-          setLoaded(true)
-        }
+        if (!cancelled) setSvgHtml(svg)
       } catch (e) {
         console.error('mermaid render:', e)
         if (!cancelled) setRenderError(code)
@@ -209,9 +209,10 @@ function MermaidView({ code }) {
 
   return (
     <div className="canvas mermaid-canvas">
-      <div ref={ref} style={{ width: '100%', textAlign: 'center' }}>
-        {!loaded && <span className="canvas-hint">rendering diagram…</span>}
-      </div>
+      {svgHtml
+        ? <div style={{ width: '100%', textAlign: 'center' }} dangerouslySetInnerHTML={{ __html: svgHtml }} />
+        : <div style={{ width: '100%', textAlign: 'center' }}><span className="canvas-hint">rendering diagram…</span></div>
+      }
     </div>
   )
 }
@@ -1454,8 +1455,8 @@ export default function App() {
                   </div>
                   <div className="rp-meta">
                     <span><b>title</b> {result.title || '—'}</span>
-                    <span><b>route</b> {result.meta.routing_reason}</span>
-                    <span className="rp-time">{result.meta.elapsed_ms}ms</span>
+                    <span><b>route</b> {result.meta?.routing_reason}</span>
+                    <span className="rp-time">{result.meta?.elapsed_ms}ms</span>
                   </div>
                 </div>
               </div>
