@@ -139,7 +139,7 @@ body::after {
   align-items: center;
 }
 .nav-logo-img {
-  height: 36px;
+  height: 52px;
   width: auto;
   display: block;
 }
@@ -941,7 +941,7 @@ body::after {
   align-items: center;
 }
 .footer-logo-img {
-  height: 30px;
+  height: 44px;
   width: auto;
   display: block;
   opacity: 0.9;
@@ -2174,7 +2174,7 @@ body::after {
     padding: 0 16px;
     gap: 10px;
   }
-  .nav-logo-img { height: 28px; }
+  .nav-logo-img { height: 40px; }
   .nav-history-btn {
     padding: 6px 10px;
     font-size: 11px;
@@ -2653,7 +2653,7 @@ body::after {
   align-items: center;
   gap: 18px;
 }
-.docs-nav-logo img { height: 30px; display: block; }
+.docs-nav-logo img { height: 44px; display: block; }
 .docs-nav-crumb {
   font-family: var(--mono);
   font-size: 13px;
@@ -3160,3 +3160,4 @@ body::after {
   }
   .ds-callout { display: none; }
 }
+
