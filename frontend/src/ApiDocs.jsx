@@ -225,7 +225,7 @@ function DocsNav() {
     <nav className="docs-nav">
       <div className="docs-nav-inner">
         <a href="/" className="docs-nav-logo">
-          <img src="/logo.svg" alt="Diagram.ai" />
+          <img src="/logo.png" alt="Diagram.ai" />
         </a>
         <span className="docs-nav-crumb">/ API documentation</span>
         <div className="docs-nav-spacer" />
@@ -553,7 +553,7 @@ export default function ApiDocs() {
 
           <footer className="docs-footer">
             <div className="df-left">
-              <img src="/logo.svg" alt="Diagram.ai" />
+              <img src="/logo.png" alt="Diagram.ai" />
               <span>v0.1.0 · built by Tanmay Shinde</span>
             </div>
             <div className="df-right">
