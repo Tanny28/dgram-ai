@@ -1,20 +1,30 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 268 60" fill="none">
 
-  <!-- D icon: outer C -->
-  <path d="M46 6 C46 6 10 6 10 30 C10 54 46 54 46 54"
-        stroke="#aaff45" stroke-width="8.5" stroke-linecap="round" fill="none"/>
+  <!--
+    "d" icon mark — two-stroke construction matching the reference:
+    • Stem runs the full icon height (ascender pokes above + below the bowl arcs)
+    • Outer arc: wide elliptical C, endpoints inset from stem ends
+    • Inner arc: tighter elliptical C (the counter of the "d"), centred in the bowl
+    Both arcs use proper bezier control points so the curves are smooth ellipses,
+    not the degenerate C(P0, P0, ...) paths that produced less circular arcs before.
+  -->
 
-  <!-- D icon: inner C -->
-  <path d="M46 18 C46 18 24 18 24 30 C24 42 46 42 46 42"
-        stroke="#aaff45" stroke-width="6.5" stroke-linecap="round" fill="none"/>
-
-  <!-- D icon: right vertical bar -->
-  <line x1="46" y1="6" x2="46" y2="54"
+  <!-- Right stem — taller than both arcs so the ascender is visible -->
+  <line x1="47" y1="3" x2="47" y2="57"
         stroke="#aaff45" stroke-width="8.5" stroke-linecap="round"/>
 
-  <!-- Logo text: "iagram.ai™" — single text element so spacing is automatic -->
-  <text y="44" font-family="'Arial Black', 'Arial', Helvetica, sans-serif" font-size="30" font-weight="900" letter-spacing="-0.5">
-    <tspan x="60" fill="#ffffff">iagram</tspan><tspan fill="#aaff45">.ai</tspan><tspan font-size="11" font-weight="400" fill="rgba(255,255,255,0.65)" dy="-14">™</tspan>
+  <!-- Outer bowl arc  (rx≈39, ry≈18, centred at 47,30) -->
+  <path d="M47 12 C 25.5 12 8 20 8 30 C 8 40 25.5 48 47 48"
+        stroke="#aaff45" stroke-width="8.5" stroke-linecap="round" fill="none"/>
+
+  <!-- Inner bowl arc / counter  (rx≈24, ry≈10, centred at 47,30) -->
+  <path d="M47 20 C 33.5 20 23 24.5 23 30 C 23 35.5 33.5 40 47 40"
+        stroke="#aaff45" stroke-width="7" stroke-linecap="round" fill="none"/>
+
+  <!-- Logo text: "iagram.ai™" -->
+  <text y="44" font-family="'Arial Black', 'Arial', Helvetica, sans-serif"
+        font-size="30" font-weight="900" letter-spacing="-0.5">
+    <tspan x="62" fill="#ffffff">iagram</tspan><tspan fill="#aaff45">.ai</tspan><tspan font-size="11" font-weight="400" fill="rgba(255,255,255,0.65)" dy="-14">™</tspan>
   </text>
 
 </svg>
