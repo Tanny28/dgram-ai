@@ -18,11 +18,10 @@ RUN cd frontend && npm ci && npm run build
 # Backend code
 COPY backend/ backend/
 
-# SQLite lives next to the backend code. Free-tier Render has no persistent
-# disk; history resets on each deploy/restart (acceptable for MVP — anonymous
-# users use localStorage, signed-in users see a fresh DB after cold starts).
-RUN mkdir -p /app/backend/data
+# DATABASE_URL is injected at runtime via Render env vars (Neon PostgreSQL).
+# Falls back to local SQLite for development if the env var is not set.
 ENV DATABASE_URL=sqlite:////app/backend/data/diagramai.db
+RUN mkdir -p /app/backend/data
 
 EXPOSE 8000
 

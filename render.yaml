@@ -17,3 +17,9 @@ services:
 
       - key: GOOGLE_CLIENT_SECRET
         sync: false              # paste from Google Cloud Console
+
+      - key: DATABASE_URL
+        sync: false              # Neon PostgreSQL connection string (postgresql://...)
+
+      - key: ADMIN_EMAIL
+        sync: false              # your Google email — grants access to /admin
