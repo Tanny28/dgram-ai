@@ -1,12 +1,12 @@
 <div align="center">
 
-<img src="frontend/public/og-image.svg" alt="DiagramAI — engineering diagrams that are correct by construction" width="100%" />
+<img src="docs/banner.png" alt="DiagramAI — Diagrams that solve themselves" width="100%" />
 
 <br/>
 
-[![Live Demo](https://img.shields.io/badge/🚀_Live_Demo-dgram--ai.onrender.com-aaff45?style=for-the-badge&labelColor=000000)](https://dgram-ai.onrender.com)
-[![API Docs](https://img.shields.io/badge/📖_API_Docs-/api--docs-6bfff7?style=for-the-badge&labelColor=000000)](https://dgram-ai.onrender.com/api-docs)
-[![Built with Groq](https://img.shields.io/badge/⚡_Groq-Structured_JSON-fafb63?style=for-the-badge&labelColor=000000)](https://console.groq.com)
+[![Live Demo](https://img.shields.io/badge/Live_Demo-dgram--ai.onrender.com-aaff45?style=for-the-badge&labelColor=000000)](https://dgram-ai.onrender.com)
+[![API Docs](https://img.shields.io/badge/API_Docs-/api--docs-6bfff7?style=for-the-badge&labelColor=000000)](https://dgram-ai.onrender.com/api-docs)
+[![Built with Groq](https://img.shields.io/badge/Groq-Structured_JSON-fafb63?style=for-the-badge&labelColor=000000)](https://console.groq.com)
 [![Python](https://img.shields.io/badge/Python-3.10+-aaff45?style=for-the-badge&logo=python&logoColor=white&labelColor=000000)](https://python.org)
 [![React](https://img.shields.io/badge/React-18_+_Vite-6bfff7?style=for-the-badge&logo=react&logoColor=white&labelColor=000000)](https://react.dev)
 
@@ -20,7 +20,7 @@
 
 ---
 
-## ⚡ The Core Idea
+## The Core Idea
 
 Most "AI diagram" tools ask a language model to generate pixels or code and hope for the best. That produces hallucinated wires, floating components, and circuits that couldn't power an LED.
 
@@ -38,7 +38,7 @@ The LLM's only job is **filling a typed Pydantic schema** using Groq's constrain
 
 ---
 
-## 🆚 How DiagramAI Compares
+## How DiagramAI Compares
 
 | | DALL-E / Stable Diffusion | Mermaid / draw.io | **DiagramAI** |
 |---|:---:|:---:|:---:|
@@ -52,22 +52,22 @@ The LLM's only job is **filling a typed Pydantic schema** using Groq's constrain
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ```mermaid
 flowchart TD
     A([User: plain English prompt]) --> B
 
-    subgraph Frontend["🖥️  Frontend — React 18 + Vite"]
+    subgraph Frontend["Frontend — React 18 + Vite"]
         B[Prompt input\nExample chips\nHistory sidebar]
     end
 
     B -->|POST /api/generate| C
 
-    subgraph Backend["⚙️  Backend — FastAPI + Python"]
+    subgraph Backend["Backend — FastAPI + Python"]
         C[Request handler] --> D
 
-        subgraph LLM["🧠  Two-Stage Groq Pipeline"]
+        subgraph LLM["Two-Stage Groq Pipeline"]
             D["Stage A — Router\nGroq strict JSON\n→ DiagramRoute\n{ kind, reasoning }"]
             D --> E["Stage B — Spec Filler\nGroq strict JSON\n→ CircuitSpec / GraphSpec / PhysicsSpec\n(Pydantic v2, additionalProperties: false)"]
         end
@@ -79,7 +79,7 @@ flowchart TD
         F -->|block| I["Graphviz\ngraphviz_render.py"]
         F -->|physics| J["Matplotlib\nphysics.py"]
 
-        G --> K["🔢 Solver\nRC · RL · RLC · divider\nStep-by-step math"]
+        G --> K["Solver\nRC · RL · RLC · divider\nStep-by-step math"]
     end
 
     G -->|SVG| L
@@ -90,7 +90,7 @@ flowchart TD
 
     L["JSON response:\nimage_b64 + spec + solution"] -->|HTTP| M
 
-    subgraph Result["📊 Result Panel"]
+    subgraph Result["Result Panel"]
         M[Rendered diagram\n+ Math working\n+ Spec inspector\n+ History entry]
     end
 ```
@@ -108,7 +108,7 @@ The LLM pipeline has two stages, each using Groq's strict JSON schema mode:
 
 ---
 
-## 🎨 Supported Diagram Types
+## Supported Diagram Types
 
 | Type | Renderer | Math Solver | Example Prompt |
 |------|----------|:-----------:|----------------|
@@ -121,7 +121,7 @@ The LLM pipeline has two stages, each using Groq's strict JSON schema mode:
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 
@@ -159,7 +159,7 @@ cd frontend && npm run dev
 
 ---
 
-## 📡 API
+## API
 
 ### `POST /api/generate`
 
@@ -202,7 +202,7 @@ See the full interactive reference at [`/api-docs`](https://dgram-ai.onrender.co
 
 ---
 
-## 🗂️ Project Structure
+## Project Structure
 
 ```
 dgram-ai/
@@ -226,6 +226,8 @@ dgram-ai/
 │       ├── App.jsx              # Main SPA (prompt, results, history, OAuth)
 │       ├── ApiDocs.jsx          # Interactive API documentation
 │       └── styles.css           # Design system (dark + #aaff45 accent)
+├── docs/
+│   └── banner.png               # Product banner
 ├── Dockerfile                   # Single-container build (backend serves built frontend)
 ├── render.yaml                  # One-click Render deploy (free tier)
 └── docker-compose.yml
@@ -233,7 +235,7 @@ dgram-ai/
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 | Layer | Technology | Why |
 |-------|-----------|-----|
@@ -251,7 +253,7 @@ dgram-ai/
 
 ---
 
-## 🔌 Offline Mode
+## Offline Mode
 
 No API key? No internet? No problem.
 
@@ -259,7 +261,7 @@ DiagramAI ships with a keyword-based fallback router and a library of curated ca
 
 ---
 
-## 🔐 Google OAuth (optional)
+## Google OAuth (optional)
 
 Signed-in users get cloud history sync across devices. History is stored in SQLite on the backend instead of browser `localStorage`. When OAuth is not configured, the sign-in button auto-hides and localStorage is used — nothing breaks.
 
@@ -273,7 +275,7 @@ SESSION_SECRET=<32-byte hex>
 
 ---
 
-## ☁️ Deploy to Render (one click)
+## Deploy to Render (one click)
 
 1. Fork / push to GitHub
 2. [Render](https://render.com) → **New → Blueprint** → connect repo
@@ -284,7 +286,7 @@ The free tier sleeps after 15 min inactivity (first request ~30s cold start). Pa
 
 ---
 
-## 🛣️ Roadmap
+## Roadmap
 
 The current prototype proves the core thesis: **constrained decoding + deterministic rendering = correct-by-construction diagrams**. Future development tracks:
 
@@ -310,7 +312,7 @@ The current prototype proves the core thesis: **constrained decoding + determini
 
 ---
 
-## 🔬 Why "Correct by Construction"
+## Why "Correct by Construction"
 
 The phrase is borrowed from formal verification. In hardware design, a circuit is *correct by construction* if the design rules guarantee correctness before simulation. DiagramAI applies this to AI output:
 
