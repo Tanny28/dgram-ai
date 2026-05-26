@@ -60,3 +60,13 @@ def current_user_required(user: User | None = Depends(current_user_optional)) ->
     if not user:
         raise HTTPException(status_code=401, detail="not authenticated")
     return user
+
+
+def admin_required(user: User | None = Depends(current_user_optional)) -> User:
+    """Only allows access if the signed-in user's email matches ADMIN_EMAIL env var."""
+    if not user:
+        raise HTTPException(status_code=401, detail="not authenticated")
+    admin_email = os.environ.get("ADMIN_EMAIL", "").strip().lower()
+    if not admin_email or user.email.lower() != admin_email:
+        raise HTTPException(status_code=403, detail="admin access required")
+    return user

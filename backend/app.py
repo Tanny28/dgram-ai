@@ -31,8 +31,8 @@ from core.brain import route_prompt, build_spec
 from core.schemas import DiagramKind, CircuitSpec, GraphSpec, PhysicsSpec
 from core import solver as solver_mod
 from core import practice_problems as practice_mod
-from core.db import init_db, get_db, User, HistoryItem
-from core.auth import oauth, google_configured, is_edu_email, current_user_optional, current_user_required
+from core.db import init_db, get_db, User, HistoryItem, GenerationLog
+from core.auth import oauth, google_configured, is_edu_email, current_user_optional, current_user_required, admin_required
 from renderers.circuit import render_circuit
 from renderers.graphviz_render import render_graphviz
 from renderers.physics import render_physics
@@ -361,12 +361,34 @@ def _render_and_solve(kind: DiagramKind, spec) -> dict:
 
 
 @app.post("/api/generate", response_model=GenerateResponse)
-def generate(req: GenerateRequest):
+def generate(
+    req: GenerateRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
     t0 = time.time()
 
     route = route_prompt(req.prompt)
     spec = build_spec(req.prompt, route)
     out = _render_and_solve(route.kind, spec)
+
+    elapsed_ms = int((time.time() - t0) * 1000)
+    is_offline = not bool(os.environ.get("GROQ_API_KEY"))
+
+    # Log every generation for the admin dashboard (user_id nullable for anon)
+    try:
+        user_id = request.session.get("user_id")
+        db.add(GenerationLog(
+            user_id=user_id,
+            prompt=req.prompt,
+            kind=route.kind.value,
+            title=getattr(spec, "title", ""),
+            latency_ms=elapsed_ms,
+            offline=is_offline,
+        ))
+        db.commit()
+    except Exception as e:
+        print(f"[api] failed to write generation log: {e}")
 
     return GenerateResponse(
         ok=True,
@@ -378,8 +400,8 @@ def generate(req: GenerateRequest):
         solution=out["solution"],
         meta={
             "routing_reason": route.reasoning,
-            "elapsed_ms": int((time.time() - t0) * 1000),
-            "offline": not bool(os.environ.get("GROQ_API_KEY")),
+            "elapsed_ms": elapsed_ms,
+            "offline": is_offline,
         },
     )
 
@@ -434,6 +456,136 @@ def rerender(req: RerenderRequest):
             "offline": not bool(os.environ.get("GROQ_API_KEY")),
         },
     )
+
+
+# ═══════════════════════════════════════════════════════════════
+#  ADMIN ROUTES  (ADMIN_EMAIL env var guards every endpoint)
+# ═══════════════════════════════════════════════════════════════
+
+from sqlalchemy import func, desc
+from datetime import datetime, timedelta
+
+
+@app.get("/api/admin/stats")
+def admin_stats(
+    _admin: User = Depends(admin_required),
+    db: Session = Depends(get_db),
+):
+    """High-level numbers for the dashboard header cards."""
+    total_users = db.query(func.count(User.id)).scalar() or 0
+    total_gens  = db.query(func.count(GenerationLog.id)).scalar() or 0
+
+    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_gens  = db.query(func.count(GenerationLog.id)).filter(
+        GenerationLog.created_at >= today_start
+    ).scalar() or 0
+
+    live_gens = db.query(func.count(GenerationLog.id)).filter(
+        GenerationLog.offline == False  # noqa: E712
+    ).scalar() or 0
+
+    avg_latency = db.query(func.avg(GenerationLog.latency_ms)).filter(
+        GenerationLog.offline == False  # noqa: E712
+    ).scalar()
+
+    # kind breakdown
+    kind_rows = db.query(
+        GenerationLog.kind,
+        func.count(GenerationLog.id).label("cnt")
+    ).group_by(GenerationLog.kind).all()
+
+    return {
+        "total_users":  total_users,
+        "total_gens":   total_gens,
+        "today_gens":   today_gens,
+        "live_gens":    live_gens,
+        "offline_gens": total_gens - live_gens,
+        "avg_latency_ms": round(avg_latency) if avg_latency else None,
+        "by_kind": {row.kind or "unknown": row.cnt for row in kind_rows},
+    }
+
+
+@app.get("/api/admin/users")
+def admin_users(
+    offset: int = 0,
+    limit: int = 50,
+    _admin: User = Depends(admin_required),
+    db: Session = Depends(get_db),
+):
+    """All registered users with their generation counts."""
+    users = db.query(User).order_by(desc(User.created_at)).offset(offset).limit(limit).all()
+    total = db.query(func.count(User.id)).scalar() or 0
+
+    rows = []
+    for u in users:
+        gen_count = db.query(func.count(GenerationLog.id)).filter(
+            GenerationLog.user_id == u.id
+        ).scalar() or 0
+        last_gen = db.query(func.max(GenerationLog.created_at)).filter(
+            GenerationLog.user_id == u.id
+        ).scalar()
+        rows.append({
+            "id":         u.id,
+            "email":      u.email,
+            "name":       u.name or "",
+            "picture":    u.picture or "",
+            "edu":        is_edu_email(u.email),
+            "gen_count":  gen_count,
+            "joined_at":  int(u.created_at.timestamp() * 1000),
+            "last_gen_at": int(last_gen.timestamp() * 1000) if last_gen else None,
+        })
+
+    return {"total": total, "users": rows}
+
+
+@app.get("/api/admin/logs")
+def admin_logs(
+    offset: int = 0,
+    limit: int = 100,
+    _admin: User = Depends(admin_required),
+    db: Session = Depends(get_db),
+):
+    """Recent generation logs across all users (signed-in and anonymous)."""
+    logs = (
+        db.query(GenerationLog)
+        .order_by(desc(GenerationLog.created_at))
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+    total = db.query(func.count(GenerationLog.id)).scalar() or 0
+
+    rows = []
+    for lg in logs:
+        rows.append({
+            "id":         lg.id,
+            "prompt":     lg.prompt,
+            "kind":       lg.kind or "",
+            "title":      lg.title or "",
+            "latency_ms": lg.latency_ms,
+            "offline":    lg.offline,
+            "user_id":    lg.user_id,
+            "user_email": lg.user.email if lg.user else None,
+            "created_at": int(lg.created_at.timestamp() * 1000),
+        })
+
+    return {"total": total, "logs": rows}
+
+
+@app.delete("/api/admin/users/{user_id}")
+def admin_delete_user(
+    user_id: int,
+    _admin: User = Depends(admin_required),
+    db: Session = Depends(get_db),
+):
+    """Remove a user account and all their history. Logs are kept (user_id set to NULL)."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="user not found")
+    db.delete(user)
+    db.commit()
+    return {"ok": True}
 
 
 from fastapi.responses import FileResponse

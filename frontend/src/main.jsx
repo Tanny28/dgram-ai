@@ -2,13 +2,17 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import ApiDocs from './ApiDocs.jsx'
+import Admin from './Admin.jsx'
 import './styles.css'
 
-// Static routing: /api-docs renders the API documentation page; everything else
-// goes to the landing app. Uses a pathname check at the entry point (no router dep)
-// so the dispatch happens before any hooks are called.
+// Static routing: pathname check at entry point (no router dep).
+// /api-docs → API docs page
+// /admin    → Admin dashboard (gated by ADMIN_EMAIL on the server)
+// everything else → main landing app
 const path = window.location.pathname.replace(/\/$/, '')
-const Page = path === '/api-docs' ? ApiDocs : App
+const Page = path === '/api-docs' ? ApiDocs
+           : path === '/admin'    ? Admin
+           : App
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
